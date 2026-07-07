@@ -1,0 +1,6 @@
+{
+  "name": "ERPNext AI Copilot Architect",
+  "description": "An interactive step-by-step architectural guide, code generator, and simulation playground for integrating ERPNext databases with an AI chatbot using Gemini function calling.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
