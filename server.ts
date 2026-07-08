@@ -25,11 +25,11 @@ let mockCustomers: Record<string, { outstanding: number; credit_limit: number; e
   "Apollo Hospitals": { outstanding: 0, credit_limit: 300000, email: "inventory@apollo.com" }
 };
 
-const mockLeads = [
+let mockLeads = [
   { id: "lead_01", lead_name: "Amit Sharma", company_name: "Sharma Diagnostics", email: "amit@sharmadiag.com", phone: "+91 98765 43210", created_at: "2026-07-01T10:00:00Z" }
 ];
 
-const mockQuotations = [
+let mockQuotations = [
   { id: "QTN-2026-001", customer_name: "Tata Motors", item_code: "ERP-ITEM-202", qty: 100, grand_total: 8500, status: "Draft", created_at: "2026-07-01T11:30:00Z" }
 ];
 
@@ -67,6 +67,114 @@ app.get("/api/erpnext/quotations", (req, res) => {
   res.json(mockQuotations);
 });
 
+app.post("/api/erpnext/clear", (req, res) => {
+  const { table } = req.body;
+  if (table === "stock" || !table) {
+    for (const key in mockStock) delete mockStock[key];
+  }
+  if (table === "customers" || !table) {
+    for (const key in mockCustomers) delete mockCustomers[key];
+  }
+  if (table === "leads" || !table) {
+    mockLeads = [];
+  }
+  if (table === "quotations" || !table) {
+    mockQuotations = [];
+  }
+  res.json({ status: "success", message: "Database cleared successfully." });
+});
+
+app.post("/api/erpnext/reset-default", (req, res) => {
+  // Clear first
+  for (const key in mockStock) delete mockStock[key];
+  for (const key in mockCustomers) delete mockCustomers[key];
+  mockLeads = [];
+  mockQuotations = [];
+
+  // Restore defaults
+  Object.assign(mockStock, {
+    "ERP-ITEM-101": { name: "Surgical Face Mask 3-Ply", stock: 1250, warehouse: "Main Store", price: 12 },
+    "ERP-ITEM-202": { name: "N95 Respirator Mask", stock: 320, warehouse: "Main Store", price: 85 },
+    "ERP-ITEM-303": { name: "Hand Sanitizer 500ml", stock: 80, warehouse: "Finished Goods Warehouse", price: 150 },
+    "ERP-ITEM-404": { name: "Digital Thermometer", stock: 15, warehouse: "Delhi Regional Warehouse", price: 450 }
+  });
+
+  Object.assign(mockCustomers, {
+    "Tata Motors": { outstanding: 450000, credit_limit: 1000000, email: "procure@tatamotors.com" },
+    "Reliance Industries": { outstanding: 120000, credit_limit: 500000, email: "contact@ril.com" },
+    "Apollo Hospitals": { outstanding: 0, credit_limit: 300000, email: "inventory@apollo.com" }
+  });
+
+  mockLeads.push(
+    { id: "lead_01", lead_name: "Amit Sharma", company_name: "Sharma Diagnostics", email: "amit@sharmadiag.com", phone: "+91 98765 43210", created_at: "2026-07-01T10:00:00Z" }
+  );
+
+  mockQuotations.push(
+    { id: "QTN-2026-001", customer_name: "Tata Motors", item_code: "ERP-ITEM-202", qty: 100, grand_total: 8500, status: "Draft", created_at: "2026-07-01T11:30:00Z" }
+  );
+
+  res.json({ status: "success", message: "Database reset to defaults." });
+});
+
+app.post("/api/erpnext/add-record", (req, res) => {
+  const { table, data } = req.body;
+  if (!table || !data) {
+    return res.status(400).json({ error: "Missing table or data." });
+  }
+
+  try {
+    if (table === "stock") {
+      const { item_code, name, stock, warehouse, price } = data;
+      if (!item_code || !name) return res.status(400).json({ error: "Item Code aur Name required hain." });
+      mockStock[item_code] = {
+        name,
+        stock: Number(stock) || 0,
+        warehouse: warehouse || "Main Store",
+        price: Number(price) || 0
+      };
+    } else if (table === "customers") {
+      const { customer_name, outstanding, credit_limit, email } = data;
+      if (!customer_name) return res.status(400).json({ error: "Customer Name required hai." });
+      mockCustomers[customer_name] = {
+        outstanding: Number(outstanding) || 0,
+        credit_limit: Number(credit_limit) || 0,
+        email: email || ""
+      };
+    } else if (table === "leads") {
+      const { lead_name, company_name, email, phone } = data;
+      if (!lead_name || !company_name || !email) return res.status(400).json({ error: "Lead Name, Company Name, aur Email required hain." });
+      const newId = `lead_${String(mockLeads.length + 1).padStart(2, "0")}`;
+      mockLeads.push({
+        id: newId,
+        lead_name,
+        company_name,
+        email,
+        phone: phone || "Not Provided",
+        created_at: new Date().toISOString()
+      });
+    } else if (table === "quotations") {
+      const { customer_name, item_code, qty, grand_total, status } = data;
+      if (!customer_name || !item_code || !qty) return res.status(400).json({ error: "Customer, Item Code aur Quantity required hain." });
+      const newId = `QTN-2026-${String(mockQuotations.length + 1).padStart(3, "0")}`;
+      mockQuotations.push({
+        id: newId,
+        customer_name,
+        item_code,
+        qty: Number(qty) || 0,
+        grand_total: Number(grand_total) || 0,
+        status: status || "Draft",
+        created_at: new Date().toISOString()
+      });
+    } else {
+      return res.status(400).json({ error: "Invalid table specified." });
+    }
+
+    res.json({ status: "success", message: "Record added successfully." });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Helper to communicate with real ERPNext REST API
 async function callERPNextAPI(url: string, method: string, path: string, apiKey: string, apiSecret: string, body?: any) {
   const cleanUrl = url.replace(/\/$/, "");
@@ -74,7 +182,8 @@ async function callERPNextAPI(url: string, method: string, path: string, apiKey:
   const headers: Record<string, string> = {
     "Accept": "application/json",
     "Content-Type": "application/json",
-    "Authorization": `token ${apiKey}:${apiSecret}`
+    "Authorization": `token ${apiKey}:${apiSecret}`,
+    "ngrok-skip-browser-warning": "true"
   };
   
   const response = await fetch(fullUrl, {
@@ -104,7 +213,8 @@ app.post("/api/erpnext/test", async (req, res) => {
       method: "GET",
       headers: {
         "Accept": "application/json",
-        "Authorization": `token ${apiKey}:${apiSecret}`
+        "Authorization": `token ${apiKey}:${apiSecret}`,
+        "ngrok-skip-browser-warning": "true"
       }
     });
 
@@ -134,17 +244,46 @@ app.post("/api/erpnext/sync", async (req, res) => {
   try {
     // 1. Fetch Items
     logs.push(`[${new Date().toLocaleTimeString()}] Fetching ERPNext Item records...`);
-    const itemsRes = await fetch(`${cleanUrl}/api/resource/Item?fields=["name","item_name","standard_rate","warehouse"]&limit_page_length=5`, {
-      headers: { "Accept": "application/json", "Authorization": `token ${apiKey}:${apiSecret}` }
+    const itemsRes = await fetch(`${cleanUrl}/api/resource/Item?fields=["name","item_name","item_code","description"]&limit_page_length=5`, {
+      headers: { 
+        "Accept": "application/json", 
+        "Authorization": `token ${apiKey}:${apiSecret}`,
+        "ngrok-skip-browser-warning": "true"
+      }
     });
 
-    if (!itemsRes.ok) {
-      throw new Error(`Failed to fetch Items: ${itemsRes.statusText}`);
+    let erpItems = [];
+    if (!itemsRes.ok && itemsRes.status === 404) {
+      logs.push(`[${new Date().toLocaleTimeString()}] ⚠️ 'Item' Doctype not found (ERPNext is not installed on this site).`);
+      logs.push(`[${new Date().toLocaleTimeString()}] Falling back to standard Frappe 'DocType' list for mock stock mapping...`);
+      // Fallback to standard Frappe DocType
+      const fallbackRes = await fetch(`${cleanUrl}/api/resource/DocType?limit_page_length=5`, {
+        headers: { 
+          "Accept": "application/json", 
+          "Authorization": `token ${apiKey}:${apiSecret}`,
+          "ngrok-skip-browser-warning": "true"
+        }
+      });
+      if (fallbackRes.ok) {
+        const fallbackData = await fallbackRes.json();
+        const rawList = fallbackData.data || [];
+        erpItems = rawList.map((d: any, idx: number) => ({
+          item_code: d.name || `FRAPPE-DOC-${101 + idx}`,
+          item_name: d.name || "Frappe Core DocType",
+          warehouse: "Frappe Bench",
+          standard_rate: Math.floor(Math.random() * 200) + 25
+        }));
+        logs.push(`[${new Date().toLocaleTimeString()}] Successfully fetched ${erpItems.length} core DocTypes.`);
+      } else {
+        throw new Error(`Failed to fetch standard Frappe DocTypes (Status ${fallbackRes.status}): ${fallbackRes.statusText}`);
+      }
+    } else if (!itemsRes.ok) {
+      throw new Error(`Failed to fetch Items: ${itemsRes.statusText} (Status: ${itemsRes.status})`);
+    } else {
+      const itemsData = await itemsRes.json();
+      erpItems = itemsData.data || [];
+      logs.push(`[${new Date().toLocaleTimeString()}] Successfully fetched ${erpItems.length} ERPNext Item records.`);
     }
-
-    const itemsData = await itemsRes.json();
-    const erpItems = itemsData.data || [];
-    logs.push(`[${new Date().toLocaleTimeString()}] Successfully fetched ${erpItems.length} items.`);
 
     if (erpItems.length > 0) {
       // Clear old stock
@@ -153,7 +292,7 @@ app.post("/api/erpnext/sync", async (req, res) => {
       }
       
       erpItems.forEach((item: any, idx: number) => {
-        const code = item.name || `ERP-ITEM-${101 + idx}`;
+        const code = item.item_code || item.name || `ERP-ITEM-${101 + idx}`;
         mockStock[code] = {
           name: item.item_name || item.name || "Real ERPNext Item",
           stock: Math.floor(Math.random() * 500) + 10,
@@ -166,26 +305,56 @@ app.post("/api/erpnext/sync", async (req, res) => {
 
     // 2. Fetch Customers
     logs.push(`[${new Date().toLocaleTimeString()}] Fetching Accounts Receivable Ledger balances...`);
-    const custRes = await fetch(`${cleanUrl}/api/resource/Customer?fields=["name","customer_name","email_id"]&limit_page_length=3`, {
-      headers: { "Accept": "application/json", "Authorization": `token ${apiKey}:${apiSecret}` }
+    const custRes = await fetch(`${cleanUrl}/api/resource/Customer?fields=["name","customer_name"]&limit_page_length=3`, {
+      headers: { 
+        "Accept": "application/json", 
+        "Authorization": `token ${apiKey}:${apiSecret}`,
+        "ngrok-skip-browser-warning": "true"
+      }
     });
 
-    if (custRes.ok) {
-      const custData = await custRes.json();
-      const erpCustomers = custData.data || [];
-      if (erpCustomers.length > 0) {
-        for (const key in mockCustomers) {
-          delete mockCustomers[key];
+    let erpCustomers = [];
+    if (!custRes.ok && custRes.status === 404) {
+      logs.push(`[${new Date().toLocaleTimeString()}] ⚠️ 'Customer' Doctype not found.`);
+      logs.push(`[${new Date().toLocaleTimeString()}] Falling back to standard Frappe 'User' list for ledger balance mapping...`);
+      // Fallback to standard Frappe User
+      const fallbackCustRes = await fetch(`${cleanUrl}/api/resource/User?limit_page_length=3`, {
+        headers: { 
+          "Accept": "application/json", 
+          "Authorization": `token ${apiKey}:${apiSecret}`,
+          "ngrok-skip-browser-warning": "true"
         }
-        erpCustomers.forEach((c: any) => {
-          mockCustomers[c.name] = {
-            outstanding: Math.floor(Math.random() * 200000),
-            credit_limit: 500000,
-            email: c.email_id || "accounts@customer.com"
-          };
-        });
-        logs.push(`[${new Date().toLocaleTimeString()}] Synced Accounts Receivable balances for ${erpCustomers.length} customers.`);
+      });
+      if (fallbackCustRes.ok) {
+        const fallbackCustData = await fallbackCustRes.json();
+        const rawUsers = fallbackCustData.data || [];
+        erpCustomers = rawUsers.map((u: any) => ({
+          name: u.name,
+          customer_name: u.name,
+          email_id: u.name.includes("@") ? u.name : "admin@localhost"
+        }));
+        logs.push(`[${new Date().toLocaleTimeString()}] Successfully fetched ${erpCustomers.length} Frappe Users.`);
       }
+    } else if (custRes.ok) {
+      const custData = await custRes.json();
+      erpCustomers = custData.data || [];
+      logs.push(`[${new Date().toLocaleTimeString()}] Successfully fetched ${erpCustomers.length} ERPNext Customer records.`);
+    } else {
+      logs.push(`[${new Date().toLocaleTimeString()}] ⚠️ Customer fetch skipped (Status: ${custRes.status})`);
+    }
+
+    if (erpCustomers.length > 0) {
+      for (const key in mockCustomers) {
+        delete mockCustomers[key];
+      }
+      erpCustomers.forEach((c: any) => {
+        mockCustomers[c.name] = {
+          outstanding: Math.floor(Math.random() * 200000),
+          credit_limit: 500000,
+          email: c.email_id || "accounts@customer.com"
+        };
+      });
+      logs.push(`[${new Date().toLocaleTimeString()}] Synced Accounts Receivable balances for ${erpCustomers.length} customers/users.`);
     }
 
     logs.push(`[${new Date().toLocaleTimeString()}] ERPNext Real Sync completed successfully! 🚀`);
@@ -246,27 +415,94 @@ function parseRetryAfter(error: any): number {
 // Helper to get friendly error messages for Gemini API
 function getFriendlyGeminiError(error: any): string {
   try {
-    const errMsg = error?.message || String(error || "");
-    const isRateLimit = errMsg.includes("429") || 
-                        errMsg.toLowerCase().includes("quota") || 
-                        errMsg.toLowerCase().includes("rate limit") || 
-                        errMsg.toLowerCase().includes("limit exceeded") ||
+    if (!error) return "An unknown error occurred while communicating with Gemini API.";
+    
+    let errMsg = "";
+    if (typeof error === "string") {
+      errMsg = error;
+    } else if (error instanceof Error) {
+      errMsg = error.message || "";
+    } else {
+      errMsg = JSON.stringify(error);
+    }
+
+    const lowerMsg = errMsg.toLowerCase();
+    
+    // Check for 503, unavailable, high demand, temporary overload, etc.
+    const isHighDemand = lowerMsg.includes("503") ||
+                         lowerMsg.includes("unavailable") ||
+                         lowerMsg.includes("high demand") ||
+                         lowerMsg.includes("temporary") ||
+                         lowerMsg.includes("service unavailable") ||
+                         (error && (error.status === 503 || error.code === 503 || error.status === "UNAVAILABLE"));
+
+    if (isHighDemand) {
+      return `⚠️ Google Gemini API is temporarily experiencing very high demand (503 Service Unavailable)!\n\n` +
+             `Abhi Google servers par load bahut zyada hai, jisse temporary system blockage ho raha hai.\n\n` +
+             `💡 Is issue ko bypass karne ke do behtareen tarike hain:\n\n` +
+             `1️⃣ **Try Again (Retrying)**: Kripya thodi der baad (10-20 seconds me) fir se query try karein, spikes bahut temporary hote hain aur retry karne par chal jata hai.\n` +
+             `2️⃣ **Apni Key Enter Karein**: Google AI Studio (https://aistudio.google.com/app/apikey) se apni **custom Free Gemini API Key** generate karke screen par upar diye gaye **'Custom Gemini API Key'** input field me enter karein. Isse aapko instant priority dedicated pipeline aur direct uninterrupted access mil jayega!`;
+    }
+
+    // Check for rate limit / quota
+    const isRateLimit = lowerMsg.includes("429") || 
+                        lowerMsg.includes("quota") || 
+                        lowerMsg.includes("rate limit") || 
+                        lowerMsg.includes("limit exceeded") ||
                         (error && (error.status === 429 || error.code === 429 || error.status === "RESOURCE_EXHAUSTED"));
 
     if (isRateLimit) {
       const seconds = parseRetryAfter(error);
       return `⚠️ Google Gemini API Free Quota Exceeded!\n\n` +
              `Aapka agla search/query time abhi ${seconds} seconds ke baad hai.\n\n` +
-             `💡 Is issue ko fix karne ke do behtareen tarike hain:\n` +
-             `1. Kripya ${seconds} seconds wait karein (taaki free tier quota reset ho sake) aur fir se message send karein.\n` +
-             `2. Google AI Studio (https://aistudio.google.com/app/apikey) se apni custom Gemini API Key generate karke upar 'Custom Gemini API Key' input field me use karein, jisse bina kisi rate limit ke chatbot chalega.`;
+             `💡 Is issue ko fix karne ke do behtareen tarike hain:\n\n` +
+             `1️⃣ **Wait Karein**: Kripya ${seconds} seconds wait karein (taaki free tier quota reset ho sake) aur fir se message send karein.\n` +
+             `2️⃣ **Apni Key Use Karein**: Google AI Studio (https://aistudio.google.com/app/apikey) se apni **custom Gemini API Key** generate karke upar 'Custom Gemini API Key' input field me use karein, jisse bina kisi rate limit ke chatbot chalega.`;
     }
-    if (errMsg.toLowerCase().includes("api key") || errMsg.toLowerCase().includes("invalid key") || errMsg.toLowerCase().includes("not found")) {
+
+    // Check for invalid API key
+    if (lowerMsg.includes("api key") || lowerMsg.includes("invalid key") || lowerMsg.includes("not found")) {
       return "⚠️ Gemini API Key invalid hai ya configure nahi ki gayi hai. Kripya upar custom API key enter karein ya Settings > Secrets me verify karein.";
     }
+
+    // If it's a JSON string, let's try to extract the inner message so we don't display raw JSON
+    if (errMsg.trim().startsWith("{") && errMsg.trim().endsWith("}")) {
+      try {
+        const parsed = JSON.parse(errMsg);
+        if (parsed.error && parsed.error.message) {
+          return `⚠️ Gemini API Error: ${parsed.error.message}`;
+        }
+      } catch (e) {}
+    }
+
     return errMsg;
   } catch (err) {
     return "An unexpected error occurred while communicating with Gemini API.";
+  }
+}
+
+// Helper to retry Gemini requests when transient (503 / High Demand) issues occur
+async function generateContentWithRetry(chatAi: any, options: { model: string, contents: any, config?: any }, maxRetries = 2): Promise<any> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await chatAi.models.generateContent(options);
+    } catch (error: any) {
+      attempt++;
+      const errMsg = error?.message || String(error || "");
+      const isTransient = errMsg.includes("503") || 
+                          errMsg.toLowerCase().includes("unavailable") || 
+                          errMsg.toLowerCase().includes("high demand") || 
+                          errMsg.toLowerCase().includes("temporary") ||
+                          error?.status === 503 || error?.code === 503;
+      if (isTransient && attempt <= maxRetries) {
+        console.warn(`Gemini 503 high demand detected. Retrying attempt ${attempt}/${maxRetries} after delay...`);
+        // Wait 1.5 seconds before retrying
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        continue;
+      }
+      throw error;
+    }
   }
 }
 
@@ -285,7 +521,7 @@ app.post("/api/proxy/chat", async (req, res) => {
     }
 
     const prompt = `Context: ${JSON.stringify(stock_data || [])}. User Query: ${user_message}. Act as a friendly ERP Assistant and reply briefly in mixed Hindi and English. Keep it concise.`;
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
       model: "gemini-3.5-flash",
       contents: prompt
     });
@@ -403,11 +639,11 @@ const createQuotationTool = {
 
 // Chat endpoint that runs the actual tool-calling loop with Google Gemini
 app.post("/api/gemini/chat", async (req, res) => {
-  const { messages, apiKey, erpSyncEnabled, erpUrl, erpApiKey, erpApiSecret } = req.body; // array of { role: 'user' | 'model', content: string }
+  const { messages, apiKey, erpSyncEnabled, erpUrl, erpApiKey, erpApiSecret, customSystemPrompt } = req.body; // array of { role: 'user' | 'model', content: string }
   
   const activeKey = apiKey || process.env.GEMINI_API_KEY;
 
-  const systemInstruction = `You are an ERPNext Smart Copilot. 
+  const systemInstruction = customSystemPrompt?.trim() || `You are an ERPNext Smart Copilot. 
 You help business owners and sales reps query stock, check customer outstanding amounts, create CRM leads, and create draft quotations.
 Respond politely. Since the user might speak Hindi, English, or Hinglish, respond in their preferred language of query. Keep answers clear, professional, and crisp.
 Always use the tools provided to fetch exact data from ERPNext or make modifications. If you cannot find a customer or item, state it clearly.
@@ -444,7 +680,7 @@ If the user's query is about items, customers, leads, or quotations, you MUST ca
     ];
 
     // First call to Gemini
-    const response1 = await chatAi.models.generateContent({
+    const response1 = await generateContentWithRetry(chatAi, {
       model: "gemini-3.5-flash",
       contents: lastUserMessage,
       config: {
@@ -666,7 +902,7 @@ If the user's query is about items, customers, leads, or quotations, you MUST ca
       // In the new @google/genai SDK, we feed the tool responses back using the generateContent function.
       const previousContent = response1.candidates?.[0]?.content;
       
-      const response2 = await chatAi.models.generateContent({
+      const response2 = await generateContentWithRetry(chatAi, {
         model: "gemini-3.5-flash",
         contents: [
           { role: 'user', parts: [{ text: lastUserMessage }] },

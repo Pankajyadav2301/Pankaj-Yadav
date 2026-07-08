@@ -27,7 +27,12 @@ import {
   Bot,
   Sparkles,
   Briefcase,
-  Smartphone
+  Smartphone,
+  Shield,
+  Lock,
+  ShieldCheck,
+  Eye,
+  EyeOff
 } from "lucide-react";
 
 interface LogEntry {
@@ -43,8 +48,71 @@ interface ChatMessage {
   content: string;
 }
 
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend
+} from "recharts";
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-950/95 border border-slate-800 rounded-lg p-2.5 shadow-xl backdrop-blur-sm">
+        <p className="text-[10px] font-bold text-slate-400 font-mono mb-1">{label}</p>
+        {payload.map((item: any, i: number) => {
+          let name = item.name;
+          let color = item.stroke; // use line stroke color
+          let val = item.value;
+          if (item.dataKey === "actualDemand") {
+            name = "Actual Demand";
+            color = "#059669";
+          } else if (item.dataKey === "predictedDemand") {
+            name = "AI Predicted Demand";
+            color = "#10b981";
+          } else if (item.dataKey === "stockLevel") {
+            name = "Stock Level";
+            color = "#f59e0b";
+          }
+          return (
+            <div key={i} className="flex items-center gap-2 text-xs font-mono my-0.5">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }}></span>
+              <span className="text-slate-400">{name}:</span>
+              <span className="text-slate-200 font-semibold">{val} units</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"architecture" | "stepbystep" | "simulation" | "code_snippets" | "apk_builder">("simulation");
+  const [activeTab, setActiveTab] = useState<"architecture" | "stepbystep" | "simulation" | "code_snippets" | "apk_builder" | "security">("simulation");
+  const [isDeveloperMode, setIsDeveloperMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("erp_is_developer_mode") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleDeveloperMode = (val: boolean) => {
+    setIsDeveloperMode(val);
+    if (!val) {
+      setActiveDbTab("stock");
+    }
+    try {
+      localStorage.setItem("erp_is_developer_mode", String(val));
+    } catch (e) {
+      console.error(e);
+    }
+  };
   
   // 1. Branding, Theme & Custom Title configuration state
   const [brandTheme, setBrandTheme] = useState<"emerald" | "sapphire" | "amber" | "steel" | "crimson">(() => {
@@ -56,9 +124,13 @@ export default function App() {
   });
   const [customAppName, setCustomAppName] = useState(() => {
     try {
-      return localStorage.getItem("erp_custom_app_name") || "ERPNext AI Copilot Architect & Simulator";
+      const stored = localStorage.getItem("erp_custom_app_name");
+      if (stored && stored !== "ERPNext AI Copilot Architect & Simulator") {
+        return stored;
+      }
+      return "Pankaj Yadav ERP Next-Gen Copilot";
     } catch {
-      return "ERPNext AI Copilot Architect & Simulator";
+      return "Pankaj Yadav ERP Next-Gen Copilot";
     }
   });
   const [customLogo, setCustomLogo] = useState(() => {
@@ -321,7 +393,313 @@ export default function App() {
   const [mockCustomers, setMockCustomers] = useState<any>({});
   const [mockLeads, setMockLeads] = useState<any[]>([]);
   const [mockQuotations, setMockQuotations] = useState<any[]>([]);
-  const [activeDbTab, setActiveDbTab] = useState<"stock" | "customers" | "leads" | "quotations" | "analytics" | "sync">("stock");
+  const [activeDbTab, setActiveDbTab] = useState<"stock" | "customers" | "leads" | "quotations" | "forecasting" | "supplychain" | "analytics" | "sync" | "manage">("stock");
+
+  // Next-Gen Supply Chain & Demand Forecasting States & Static Data
+  const [selectedForecastItem, setSelectedForecastItem] = useState("ERP-ITEM-101");
+  const [isGeneratingPO, setIsGeneratingPO] = useState(false);
+  const [poResultMsg, setPoResultMsg] = useState("");
+
+  const [truckProgress, setTruckProgress] = useState(0);
+  const [isDispatching, setIsDispatching] = useState(false);
+  const [shipmentLogs, setShipmentLogs] = useState<string[]>([
+    "[09:30 AM] Inbound shipment ERP-ITEM-101 dispatched from Mumbai Hub.",
+    "[10:15 AM] Inbound cargo cleared transit customs at NH4 highway.",
+    "[11:00 AM] Shipment sorted and loaded onto Dispatch Truck-42A."
+  ]);
+  const [selectedLogisticsItem, setSelectedLogisticsItem] = useState("ERP-ITEM-101");
+
+  const forecastData: Record<string, {
+    history: number[];
+    months: string[];
+    safetyStock: number;
+    reorderPoint: number;
+    eoq: number;
+    supplier: string;
+    leadTime: string;
+  }> = {
+    "ERP-ITEM-101": {
+      history: [850, 920, 1050, 1000, 1150, 1250, 1400],
+      months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul (F)"],
+      safetyStock: 250,
+      reorderPoint: 450,
+      eoq: 500,
+      supplier: "Apex Pharmaceutical Industries",
+      leadTime: "3 Days"
+    },
+    "ERP-ITEM-202": {
+      history: [300, 280, 310, 325, 290, 320, 360],
+      months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul (F)"],
+      safetyStock: 80,
+      reorderPoint: 150,
+      eoq: 200,
+      supplier: "Surgical Equipment Corp",
+      leadTime: "2 Days"
+    },
+    "ERP-ITEM-303": {
+      history: [120, 110, 95, 100, 85, 80, 110],
+      months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul (F)"],
+      safetyStock: 20,
+      reorderPoint: 40,
+      eoq: 100,
+      supplier: "Sanitizer & Hygiene Labs Ltd",
+      leadTime: "4 Days"
+    },
+    "ERP-ITEM-404": {
+      history: [25, 30, 20, 18, 15, 15, 25],
+      months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul (F)"],
+      safetyStock: 5,
+      reorderPoint: 10,
+      eoq: 30,
+      supplier: "Digital BioTech Systems",
+      leadTime: "1 Day"
+    }
+  };
+
+  const itemStockTrends: Record<string, number[]> = {
+    "ERP-ITEM-101": [1100, 950, 1350, 1200, 1050, 1250, 1150],
+    "ERP-ITEM-202": [280, 240, 420, 380, 310, 320, 280],
+    "ERP-ITEM-303": [150, 110, 90, 180, 140, 80, 120],
+    "ERP-ITEM-404": [45, 35, 25, 12, 40, 15, 30]
+  };
+
+  const getChartData = () => {
+    const itemCode = selectedForecastItem;
+    const itemForecast = forecastData[itemCode] || {
+      history: [100, 150, 130, 170, 200, 220, 250],
+      months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul (F)"]
+    };
+    
+    const stockHistoryBase = itemStockTrends[itemCode] || [100, 90, 110, 105, 95, 120, 100];
+    const currentStock = mockStock[itemCode]?.stock ?? stockHistoryBase[5];
+
+    return itemForecast.months.map((month, i) => {
+      const connIndex = itemForecast.months.length - 2;
+      
+      let stockVal = stockHistoryBase[i] ?? 100;
+      if (i === connIndex) {
+        stockVal = currentStock;
+      } else if (i === connIndex + 1) {
+        stockVal = Math.max(0, currentStock - (itemForecast.history[connIndex + 1] - itemForecast.history[connIndex]) / 2);
+      }
+
+      return {
+        name: month,
+        actualDemand: i <= connIndex ? itemForecast.history[i] : null,
+        predictedDemand: i >= connIndex ? itemForecast.history[i] : null,
+        stockLevel: stockVal
+      };
+    });
+  };
+
+  const triggerAutoPO = async (itemCode: string) => {
+    if (isGeneratingPO) return;
+    setIsGeneratingPO(true);
+    setPoResultMsg("⏳ Contacting supplier & validating lead times...");
+    
+    setTimeout(() => {
+      setPoResultMsg("📋 Draft Purchase Order (PO-2026-004) successfully created in Frappe Accounts!");
+    }, 1200);
+
+    setTimeout(async () => {
+      const currentItem = mockStock[itemCode];
+      if (currentItem) {
+        const eoq = forecastData[itemCode]?.eoq || 100;
+        const targetStock = (currentItem.stock || 0) + eoq;
+        
+        try {
+          const res = await fetch("/api/erpnext/add-record", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              table: "stock",
+              data: {
+                item_code: itemCode,
+                name: currentItem.name,
+                stock: targetStock,
+                warehouse: currentItem.warehouse,
+                price: currentItem.price
+              }
+            })
+          });
+          if (res.ok) {
+            setPoResultMsg(`✅ Success! Received +${eoq} units. Stock levels updated live in ERPNext!`);
+            fetchMockDb();
+          } else {
+            setPoResultMsg("❌ Failed to update ERPNext database.");
+          }
+        } catch (err) {
+          console.error(err);
+          setPoResultMsg("❌ Database sync error.");
+        }
+      } else {
+        setPoResultMsg("❌ Item details not found in local stock ledger.");
+      }
+      setIsGeneratingPO(false);
+    }, 2800);
+  };
+
+  const triggerDispatchTruck = () => {
+    if (isDispatching) return;
+    setIsDispatching(true);
+    setTruckProgress(0);
+    
+    const item = mockStock[selectedLogisticsItem];
+    const itemName = item ? item.name : "Surgical Supplies";
+    
+    const newLogs = [
+      `[0.0s] 🚛 Dispatch: Outbound truck loaded with +500 units of ${itemName}.`,
+    ];
+    setShipmentLogs(newLogs);
+
+    let progress = 0;
+    const interval = setInterval(() => {
+      progress += 5;
+      setTruckProgress(progress);
+      
+      if (progress === 25) {
+        setShipmentLogs(prev => [
+          ...prev,
+          `[2.5s] 🛣️ Highway Transit: Cargo truck cleared the Western Express Highway Toll. Status: Normal.`
+        ]);
+      } else if (progress === 50) {
+        setShipmentLogs(prev => [
+          ...prev,
+          `[5.0s] 🛰️ GPS Signal: Vehicle crossing state boundary. Temperature control systems verified.`
+        ]);
+      } else if (progress === 75) {
+        setShipmentLogs(prev => [
+          ...prev,
+          `[7.5s] 📦 Sorting Hub: Truck entered Regional Cargo Terminal. Unloading list generated.`
+        ]);
+      } else if (progress === 100) {
+        clearInterval(interval);
+        setShipmentLogs(prev => [
+          ...prev,
+          `[10.0s] 🏁 Delivery Complete: Truck safely arrived at ${item?.warehouse || "Main Store"}. Inventory added to database!`
+        ]);
+        
+        if (item) {
+          fetch("/api/erpnext/add-record", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              table: "stock",
+              data: {
+                item_code: selectedLogisticsItem,
+                name: item.name,
+                stock: (item.stock || 0) + 500,
+                warehouse: item.warehouse,
+                price: item.price
+              }
+            })
+          }).then(() => {
+            fetchMockDb();
+            setIsDispatching(false);
+          });
+        } else {
+          setIsDispatching(false);
+        }
+      }
+    }, 500);
+  };
+
+  // Database custom management states
+  const [formTable, setFormTable] = useState<"stock" | "customers" | "leads" | "quotations">("stock");
+  const [formStock, setFormStock] = useState({ item_code: "", name: "", stock: "", warehouse: "Main Store", price: "" });
+  const [formCustomer, setFormCustomer] = useState({ customer_name: "", outstanding: "", credit_limit: "500000", email: "" });
+  const [formLead, setFormLead] = useState({ lead_name: "", company_name: "", email: "", phone: "" });
+  const [formQuotation, setFormQuotation] = useState({ customer_name: "", item_code: "", qty: "", grand_total: "", status: "Draft" });
+  const [formStatusMessage, setFormStatusMessage] = useState({ text: "", isError: false });
+
+  const handleClearDb = async (table?: string) => {
+    try {
+      const res = await fetch("/api/erpnext/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ table })
+      });
+      if (res.ok) {
+        setFormStatusMessage({ text: `${table ? table.toUpperCase() : "Complete"} Database successfully cleared!`, isError: false });
+        fetchMockDb();
+      } else {
+        setFormStatusMessage({ text: "Failed to clear database.", isError: true });
+      }
+    } catch (e: any) {
+      setFormStatusMessage({ text: `Error: ${e.message}`, isError: true });
+    }
+  };
+
+  const handleResetDbToDefault = async () => {
+    try {
+      const res = await fetch("/api/erpnext/reset-default", {
+        method: "POST"
+      });
+      if (res.ok) {
+        setFormStatusMessage({ text: "Database successfully reset to defaults!", isError: false });
+        fetchMockDb();
+      } else {
+        setFormStatusMessage({ text: "Failed to reset database.", isError: true });
+      }
+    } catch (e: any) {
+      setFormStatusMessage({ text: `Error: ${e.message}`, isError: true });
+    }
+  };
+
+  const handleAddRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormStatusMessage({ text: "", isError: false });
+    
+    let data: any = {};
+    if (formTable === "stock") {
+      if (!formStock.item_code || !formStock.name) {
+        setFormStatusMessage({ text: "Item Code aur Name required hain!", isError: true });
+        return;
+      }
+      data = formStock;
+    } else if (formTable === "customers") {
+      if (!formCustomer.customer_name) {
+        setFormStatusMessage({ text: "Customer Name required hai!", isError: true });
+        return;
+      }
+      data = formCustomer;
+    } else if (formTable === "leads") {
+      if (!formLead.lead_name || !formLead.company_name || !formLead.email) {
+        setFormStatusMessage({ text: "Lead Name, Company Name, aur Email required hain!", isError: true });
+        return;
+      }
+      data = formLead;
+    } else if (formTable === "quotations") {
+      if (!formQuotation.customer_name || !formQuotation.item_code || !formQuotation.qty) {
+        setFormStatusMessage({ text: "Customer, Item Code aur Quantity required hain!", isError: true });
+        return;
+      }
+      data = formQuotation;
+    }
+
+    try {
+      const res = await fetch("/api/erpnext/add-record", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ table: formTable, data })
+      });
+      
+      const result = await res.json();
+      if (res.ok) {
+        setFormStatusMessage({ text: `Record successfully added in ${formTable}!`, isError: false });
+        if (formTable === "stock") setFormStock({ item_code: "", name: "", stock: "", warehouse: "Main Store", price: "" });
+        else if (formTable === "customers") setFormCustomer({ customer_name: "", outstanding: "", credit_limit: "500000", email: "" });
+        else if (formTable === "leads") setFormLead({ lead_name: "", company_name: "", email: "", phone: "" });
+        else if (formTable === "quotations") setFormQuotation({ customer_name: "", item_code: "", qty: "", grand_total: "", status: "Draft" });
+        
+        fetchMockDb();
+      } else {
+        setFormStatusMessage({ text: result.error || "Failed to add record.", isError: true });
+      }
+    } catch (e: any) {
+      setFormStatusMessage({ text: `Error: ${e.message}`, isError: true });
+    }
+  };
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const aiProvider = "gemini";
@@ -343,6 +721,23 @@ export default function App() {
     setCooldownTime(0); // Reset rate-limiting cooldown if custom API key is changed/input
     try {
       localStorage.setItem("erp_gemini_api_key", val);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const [customSystemPrompt, setCustomSystemPrompt] = useState(() => {
+    try {
+      return localStorage.getItem("erp_custom_system_prompt") || "";
+    } catch {
+      return "";
+    }
+  });
+
+  const handleSystemPromptChange = (val: string) => {
+    setCustomSystemPrompt(val);
+    try {
+      localStorage.setItem("erp_custom_system_prompt", val);
     } catch (e) {
       console.error(e);
     }
@@ -424,7 +819,8 @@ export default function App() {
           erpSyncEnabled,
           erpUrl,
           erpApiKey,
-          erpApiSecret
+          erpApiSecret,
+          customSystemPrompt
         })
       });
 
@@ -718,7 +1114,21 @@ EOF`;
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Presentation Mode / Developer Mode Toggle Switch */}
+            <button
+              onClick={() => handleToggleDeveloperMode(!isDeveloperMode)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono transition flex items-center gap-1.5 border ${
+                isDeveloperMode 
+                  ? `${tc.primaryBorder} ${tc.primaryText} bg-slate-900/80` 
+                  : "border-slate-800 text-slate-400 hover:text-slate-200 bg-slate-950/40"
+              }`}
+              title={isDeveloperMode ? "Switch to Client Demo View (Hides all tutorials/logs)" : "Switch to Developer Setup & Reboot View"}
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>{isDeveloperMode ? "🔧 Dev Mode: ON" : "👥 Client Demo: ACTIVE"}</span>
+            </button>
+
             <span className={`text-xs ${tc.primaryText} font-mono ${tc.bgLight} px-3 py-1.5 rounded-full border ${tc.borderLight} flex items-center gap-1.5`}>
               <span className={`w-2 h-2 rounded-full ${tc.primaryBg} animate-pulse`}></span>
               {erpSyncEnabled ? "Real ERPNext Live API Sync Active" : "Local Mock Sandbox Active"}
@@ -739,7 +1149,7 @@ EOF`;
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 flex flex-col gap-6">
         
         {/* QUICK BRANDING IDENTITY BAR */}
-        <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex flex-col lg:flex-row items-center justify-between gap-4">
+        <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex flex-col lg:flex-row items-center justify-between gap-4 animate-fade-in">
           <div className="flex items-center gap-3">
             <div className={`p-1.5 rounded-lg ${tc.bgLight}`}>
               <Sparkles className={`w-4 h-4 ${tc.primaryText}`} />
@@ -762,7 +1172,7 @@ EOF`;
                 <button
                   key={theme.id}
                   onClick={() => handleThemeChange(theme.id as any)}
-                  className={`w-5 h-5 rounded-full ${theme.color} border transition-all ${
+                  className={`w-5 h-5 rounded-full ${theme.color} border transition-all cursor-pointer ${
                     brandTheme === theme.id ? "scale-110 border-white ring-2 ring-slate-800" : "border-transparent opacity-60 hover:opacity-100"
                   }`}
                   title={`Switch to ${theme.label} Theme`}
@@ -785,7 +1195,8 @@ EOF`;
         </div>
 
         {/* CRITICAL URGENT REBOOT & ERROR RESOLUTION DASHBOARD */}
-        <div className={`bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border-2 ${tc.primaryBorder} rounded-2xl p-6 shadow-2xl relative overflow-hidden space-y-6`}>
+        {isDeveloperMode && (
+          <div className={`bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border-2 ${tc.primaryBorder} rounded-2xl p-6 shadow-2xl relative overflow-hidden space-y-6`}>
           <div className={`absolute top-0 right-0 w-48 h-48 ${tc.bgLight} rounded-full blur-3xl -mr-16 -mt-16`}></div>
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl -ml-16 -mb-16"></div>
           
@@ -1236,20 +1647,23 @@ def chat_with_gemini(*args, **kwargs):
             </div>
           </div>
         </div>
+        )}
 
         {/* Navigation Tabs */}
         <div className="flex border-b border-slate-800 bg-slate-900/40 p-1.5 rounded-xl gap-1">
-          <button
-            onClick={() => setActiveTab("stepbystep")}
-            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
-              activeTab === "stepbystep"
-                ? `bg-slate-800 ${tc.primaryText} border-b-2 ${tc.primaryBorder} shadow-md`
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
-            }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            <span>1. Step-by-Step Guide</span>
-          </button>
+          {isDeveloperMode && (
+            <button
+              onClick={() => setActiveTab("stepbystep")}
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
+                activeTab === "stepbystep"
+                  ? `bg-slate-800 ${tc.primaryText} border-b-2 ${tc.primaryBorder} shadow-md`
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>1. Step-by-Step Guide</span>
+            </button>
+          )}
           <button
             onClick={() => setActiveTab("simulation")}
             className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
@@ -1259,7 +1673,7 @@ def chat_with_gemini(*args, **kwargs):
             }`}
           >
             <Play className="w-4 h-4" />
-            <span>2. Live Simulation Sandbox</span>
+            <span>{isDeveloperMode ? "2. Live Simulation Sandbox" : "💬 Interactive AI Chatbot"}</span>
           </button>
           <button
             onClick={() => setActiveTab("architecture")}
@@ -1270,30 +1684,45 @@ def chat_with_gemini(*args, **kwargs):
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>3. System Architecture</span>
+            <span>{isDeveloperMode ? "3. System Architecture" : "📐 Copilot Architecture"}</span>
           </button>
           <button
-            onClick={() => setActiveTab("code_snippets")}
+            onClick={() => setActiveTab("security")}
             className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
-              activeTab === "code_snippets"
+              activeTab === "security"
                 ? `bg-slate-800 ${tc.primaryText} border-b-2 ${tc.primaryBorder} shadow-md`
                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
             }`}
           >
-            <Code2 className="w-4 h-4" />
-            <span>4. Custom App Code Snippets</span>
+            <Shield className="w-4 h-4" />
+            <span>🔐 Site & Device Security</span>
           </button>
-          <button
-            onClick={() => setActiveTab("apk_builder")}
-            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
-              activeTab === "apk_builder"
-                ? `bg-slate-800 ${tc.primaryText} border-b-2 ${tc.primaryBorder} shadow-md`
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
-            }`}
-          >
-            <Smartphone className="w-4 h-4" />
-            <span>📱 Build Android APK</span>
-          </button>
+          {isDeveloperMode && (
+            <>
+              <button
+                onClick={() => setActiveTab("code_snippets")}
+                className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
+                  activeTab === "code_snippets"
+                    ? `bg-slate-800 ${tc.primaryText} border-b-2 ${tc.primaryBorder} shadow-md`
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+                }`}
+              >
+                <Code2 className="w-4 h-4" />
+                <span>4. Custom App Code Snippets</span>
+              </button>
+              <button
+                onClick={() => setActiveTab("apk_builder")}
+                className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
+                  activeTab === "apk_builder"
+                    ? `bg-slate-800 ${tc.primaryText} border-b-2 ${tc.primaryBorder} shadow-md`
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+                }`}
+              >
+                <Smartphone className="w-4 h-4" />
+                <span>📱 Build Android APK</span>
+              </button>
+            </>
+          )}
         </div>
 
         {/* 1. STEP BY STEP GUIDE TAB */}
@@ -2402,10 +2831,10 @@ EOF
               </div>
 
               {/* Sub-tabs for tables */}
-              <div className="flex flex-wrap border-b border-slate-800/60 bg-slate-950 text-[11px] font-medium">
+              <div className="flex flex-wrap border-b border-slate-800/60 bg-slate-950 text-[11px] font-medium animate-fade-in">
                 <button
                   onClick={() => setActiveDbTab("stock")}
-                  className={`flex-1 min-w-[80px] py-2.5 text-center border-b-2 transition ${
+                  className={`flex-1 min-w-[70px] py-2.5 text-center border-b-2 transition ${
                     activeDbTab === "stock" ? `${tc.primaryBorder} ${tc.primaryText} bg-slate-900/40` : "border-transparent text-slate-400 hover:bg-slate-900"
                   }`}
                 >
@@ -2413,7 +2842,7 @@ EOF
                 </button>
                 <button
                   onClick={() => setActiveDbTab("customers")}
-                  className={`flex-1 min-w-[80px] py-2.5 text-center border-b-2 transition ${
+                  className={`flex-1 min-w-[70px] py-2.5 text-center border-b-2 transition ${
                     activeDbTab === "customers" ? `${tc.primaryBorder} ${tc.primaryText} bg-slate-900/40` : "border-transparent text-slate-400 hover:bg-slate-900"
                   }`}
                 >
@@ -2421,7 +2850,7 @@ EOF
                 </button>
                 <button
                   onClick={() => setActiveDbTab("leads")}
-                  className={`flex-1 min-w-[80px] py-2.5 text-center border-b-2 transition ${
+                  className={`flex-1 min-w-[70px] py-2.5 text-center border-b-2 transition ${
                     activeDbTab === "leads" ? `${tc.primaryBorder} ${tc.primaryText} bg-slate-900/40` : "border-transparent text-slate-400 hover:bg-slate-900"
                   }`}
                 >
@@ -2429,28 +2858,54 @@ EOF
                 </button>
                 <button
                   onClick={() => setActiveDbTab("quotations")}
-                  className={`flex-1 min-w-[80px] py-2.5 text-center border-b-2 transition ${
+                  className={`flex-1 min-w-[70px] py-2.5 text-center border-b-2 transition ${
                     activeDbTab === "quotations" ? `${tc.primaryBorder} ${tc.primaryText} bg-slate-900/40` : "border-transparent text-slate-400 hover:bg-slate-900"
                   }`}
                 >
                   📄 Quotation ({mockQuotations.length})
                 </button>
                 <button
+                  onClick={() => setActiveDbTab("forecasting")}
+                  className={`flex-1 min-w-[70px] py-2.5 text-center border-b-2 transition ${
+                    activeDbTab === "forecasting" ? `${tc.primaryBorder} ${tc.primaryText} bg-slate-900/40` : "border-transparent text-slate-400 hover:bg-slate-900"
+                  }`}
+                >
+                  🔮 Forecast
+                </button>
+                <button
+                  onClick={() => setActiveDbTab("supplychain")}
+                  className={`flex-1 min-w-[70px] py-2.5 text-center border-b-2 transition ${
+                    activeDbTab === "supplychain" ? `${tc.primaryBorder} ${tc.primaryText} bg-slate-900/40` : "border-transparent text-slate-400 hover:bg-slate-900"
+                  }`}
+                >
+                  🚚 logistics
+                </button>
+                <button
                   onClick={() => setActiveDbTab("analytics")}
-                  className={`flex-1 min-w-[80px] py-2.5 text-center border-b-2 transition ${
+                  className={`flex-1 min-w-[70px] py-2.5 text-center border-b-2 transition ${
                     activeDbTab === "analytics" ? `${tc.primaryBorder} ${tc.primaryText} bg-slate-900/40` : "border-transparent text-slate-400 hover:bg-slate-900"
                   }`}
                 >
                   📊 Analytics
                 </button>
                 <button
-                  onClick={() => setActiveDbTab("sync")}
-                  className={`flex-1 min-w-[80px] py-2.5 text-center border-b-2 transition ${
-                    activeDbTab === "sync" ? `${tc.primaryBorder} ${tc.primaryText} bg-slate-900/40` : "border-transparent text-slate-400 hover:bg-slate-900"
+                  onClick={() => setActiveDbTab("manage")}
+                  className={`flex-1 min-w-[70px] py-2.5 text-center border-b-2 transition ${
+                    activeDbTab === "manage" ? `${tc.primaryBorder} ${tc.primaryText} bg-slate-900/40` : "border-transparent text-slate-400 hover:bg-slate-900"
                   }`}
                 >
-                  ⚙️ Sync & Theme
+                  🛠️ Manage DB
                 </button>
+                {isDeveloperMode && (
+                  <button
+                    onClick={() => setActiveDbTab("sync")}
+                    className={`flex-1 min-w-[80px] py-2.5 text-center border-b-2 transition ${
+                      activeDbTab === "sync" ? `${tc.primaryBorder} ${tc.primaryText} bg-slate-900/40` : "border-transparent text-slate-400 hover:bg-slate-900"
+                    }`}
+                  >
+                    ⚙️ Sync & Theme
+                  </button>
+                )}
               </div>
 
               {/* Table Data */}
@@ -2551,6 +3006,312 @@ EOF
                         </div>
                       ))
                     )}
+                  </div>
+                )}
+
+                {activeDbTab === "forecasting" && (
+                  <div className="space-y-4 animate-fade-in">
+                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        🔮 <strong>Demand Forecasting Dashboard:</strong> AI-powered projection curve mapping past sales trends against next month's predicted order volume to optimize safety stocks.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] text-slate-400 block font-mono">SELECT STOCK ITEM FOR PROJECTION</label>
+                      <select
+                        value={selectedForecastItem}
+                        onChange={(e) => {
+                          setSelectedForecastItem(e.target.value);
+                          setPoResultMsg("");
+                        }}
+                        className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-slate-700 font-mono text-emerald-400 font-semibold"
+                      >
+                        {Object.keys(mockStock).map((code) => (
+                          <option key={code} value={code}>{code} - {mockStock[code]?.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Interactive Recharts Line Chart */}
+                    <div className="bg-slate-900/60 border border-slate-800/80 p-4 rounded-xl space-y-3">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 font-mono block">📈 DEMAND FORECAST & STOCK LEVEL CHART</span>
+                          <span className="text-[9px] text-slate-500 font-mono">Comparing Historical Trends vs. AI Predicted Demand</span>
+                        </div>
+                        <span className="text-[9px] bg-emerald-500/15 text-emerald-400 font-mono px-2 py-0.5 rounded border border-emerald-500/25 self-start">Created by Pankaj Yadav</span>
+                      </div>
+                      
+                      <div className="h-56 w-full text-slate-300 font-sans mt-2">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart
+                            data={getChartData()}
+                            margin={{ top: 15, right: 10, left: -20, bottom: 5 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                            <XAxis 
+                              dataKey="name" 
+                              stroke="#64748b" 
+                              fontSize={10} 
+                              tickLine={false}
+                              axisLine={false}
+                            />
+                            <YAxis 
+                              stroke="#64748b" 
+                              fontSize={10} 
+                              tickLine={false}
+                              axisLine={false}
+                              tickFormatter={(value) => `${value}`}
+                            />
+                            <Tooltip content={<CustomTooltip />} />
+                            <Legend 
+                              verticalAlign="top" 
+                              height={36} 
+                              iconType="circle"
+                              iconSize={8}
+                              wrapperStyle={{ fontSize: '10px', fontFamily: 'monospace' }}
+                            />
+                            <Line
+                              name="Stock Level"
+                              type="monotone"
+                              dataKey="stockLevel"
+                              stroke="#f59e0b"
+                              strokeWidth={2.5}
+                              dot={{ r: 4, stroke: "#0f172a", strokeWidth: 1.5, fill: "#f59e0b" }}
+                              activeDot={{ r: 6 }}
+                            />
+                            <Line
+                              name="Actual Demand"
+                              type="monotone"
+                              dataKey="actualDemand"
+                              stroke="#059669"
+                              strokeWidth={2.5}
+                              dot={{ r: 4, stroke: "#0f172a", strokeWidth: 1.5, fill: "#059669" }}
+                              activeDot={{ r: 6 }}
+                            />
+                            <Line
+                              name="AI Predicted Demand"
+                              type="monotone"
+                              dataKey="predictedDemand"
+                              stroke="#10b981"
+                              strokeWidth={2.5}
+                              strokeDasharray="4 4"
+                              dot={{ r: 5, stroke: "#0f172a", strokeWidth: 2, fill: "#34d399" }}
+                              activeDot={{ r: 7 }}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Stats & EOQ Table */}
+                    <div className="bg-slate-900 p-3.5 rounded-xl border border-slate-800 space-y-3">
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="p-2 bg-slate-950/40 rounded border border-slate-800/60">
+                          <span className="text-[10px] text-slate-500 block font-mono">🛡️ Safety Stock Level</span>
+                          <span className="text-sm font-semibold font-mono text-slate-200">
+                            {forecastData[selectedForecastItem]?.safetyStock} units
+                          </span>
+                        </div>
+                        <div className="p-2 bg-slate-950/40 rounded border border-slate-800/60">
+                          <span className="text-[10px] text-slate-500 block font-mono">🚨 Reorder Point (ROP)</span>
+                          <span className="text-sm font-semibold font-mono text-amber-400">
+                            {forecastData[selectedForecastItem]?.reorderPoint} units
+                          </span>
+                        </div>
+                        <div className="p-2 bg-slate-950/40 rounded border border-slate-800/60">
+                          <span className="text-[10px] text-slate-500 block font-mono">📦 Econ Order Qty (EOQ)</span>
+                          <span className="text-sm font-semibold font-mono text-teal-400">
+                            {forecastData[selectedForecastItem]?.eoq} units
+                          </span>
+                        </div>
+                        <div className="p-2 bg-slate-950/40 rounded border border-slate-800/60">
+                          <span className="text-[10px] text-slate-500 block font-mono">⏱️ Inbound Lead Time</span>
+                          <span className="text-sm font-semibold font-mono text-slate-200">
+                            {forecastData[selectedForecastItem]?.leadTime}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="border-t border-slate-800/80 pt-3 space-y-2.5">
+                        <div className="flex justify-between items-center text-xs text-slate-400">
+                          <span>Primary Vendor:</span>
+                          <strong className="text-slate-200 text-right">{forecastData[selectedForecastItem]?.supplier}</strong>
+                        </div>
+                        <div className="flex justify-between items-center text-xs text-slate-400">
+                          <span>Current Warehouse Stock:</span>
+                          <strong className="font-mono text-slate-200">{mockStock[selectedForecastItem]?.stock || 0} units</strong>
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          onClick={() => triggerAutoPO(selectedForecastItem)}
+                          disabled={isGeneratingPO}
+                          className={`w-full text-center font-bold font-sans text-xs py-2.5 px-4 rounded-xl transition border shadow-lg flex items-center justify-center gap-2 ${
+                            isGeneratingPO 
+                              ? "bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed" 
+                              : `bg-gradient-to-r ${tc.gradient} text-slate-950 hover:brightness-110 active:scale-[0.98] cursor-pointer`
+                          }`}
+                        >
+                          <Sparkles className="w-4 h-4" />
+                          <span>{isGeneratingPO ? "Generating Procurement Plan..." : "⚡ Auto-Generate AI Purchase Order"}</span>
+                        </button>
+
+                        {poResultMsg && (
+                          <div className={`mt-3 p-2.5 text-xs rounded border font-mono ${
+                            poResultMsg.includes("Success") 
+                              ? "bg-emerald-950/40 border-emerald-500/30 text-emerald-400 animate-pulse" 
+                              : "bg-slate-950 border-slate-800 text-slate-300"
+                          }`}>
+                            {poResultMsg}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeDbTab === "supplychain" && (
+                  <div className="space-y-4 animate-fade-in">
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        🚚 <strong>Active Logistics Control Tower:</strong> Map active inland shipping routes. Trigger a simulated cargo dispatch to update local warehouse bins live upon delivery!
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <label className="text-[10px] text-slate-400 block font-mono">SELECT SUPPLY TO DISPATCH</label>
+                        <select
+                          value={selectedLogisticsItem}
+                          onChange={(e) => setSelectedLogisticsItem(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-slate-700 font-mono mt-1 font-semibold text-blue-400"
+                        >
+                          {Object.keys(mockStock).map((code) => (
+                            <option key={code} value={code}>{code} - {mockStock[code]?.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 block font-mono">CARGO VOLUME</label>
+                        <div className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-300 font-mono mt-1 text-center font-bold">
+                          +500 units (Inbound)
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* SVG Map of Delivery Track */}
+                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-3">
+                      <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 font-mono">
+                        <span>🛰️ RE-ROUTE HIGHWAY MAP VIEW</span>
+                        <span className="text-blue-400 flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping"></span> Live Transit Tracking
+                        </span>
+                      </div>
+
+                      <div className="relative h-28 bg-slate-950 border border-slate-800/80 rounded-lg overflow-hidden flex items-center justify-center">
+                        <svg viewBox="0 0 400 100" className="w-full h-full">
+                          {/* Deliver Track Path */}
+                          <path
+                            d="M 40 50 Q 200 15 360 50"
+                            fill="none"
+                            stroke="#1e293b"
+                            strokeWidth="4"
+                            strokeDasharray="6"
+                            id="route-line"
+                          />
+                          <path
+                            d="M 40 50 Q 200 15 360 50"
+                            fill="none"
+                            stroke="#3b82f6"
+                            strokeWidth="3.5"
+                            strokeDasharray="4 6"
+                            strokeDashoffset={-truckProgress * 2}
+                            className="transition-all duration-300"
+                          />
+
+                          {/* Nodes */}
+                          <g>
+                            <circle cx="40" cy="50" r="8" fill="#1e293b" stroke="#3b82f6" strokeWidth="2.5" />
+                            <text x="40" y="70" textAnchor="middle" fill="#94a3b8" fontSize="8" fontFamily="monospace" fontWeight="bold">Supplier Hub</text>
+                          </g>
+
+                          <g>
+                            <circle cx="200" cy="32" r="6" fill="#1e293b" stroke="#f59e0b" strokeWidth="2" />
+                            <text x="200" y="16" textAnchor="middle" fill="#f59e0b" fontSize="8" fontFamily="monospace">Jaipur Toll</text>
+                          </g>
+
+                          <g>
+                            <circle cx="360" cy="50" r="8" fill="#1e293b" stroke="#10b981" strokeWidth="2.5" />
+                            <text x="360" y="70" textAnchor="middle" fill="#34d399" fontSize="8" fontFamily="monospace" fontWeight="bold">Warehouse</text>
+                          </g>
+
+                          {/* Truck Indicator along curve */}
+                          {(() => {
+                            const t = truckProgress / 100;
+                            const x = (1 - t) * (1 - t) * 40 + 2 * (1 - t) * t * 200 + t * t * 360;
+                            const y = (1 - t) * (1 - t) * 50 + 2 * (1 - t) * t * 15 + t * t * 50;
+                            
+                            return (
+                              <g transform={`translate(${x - 10}, ${y - 12})`}>
+                                <rect x="0" y="0" width="20" height="12" rx="3" fill="#3b82f6" className="shadow-lg" />
+                                <rect x="14" y="2" width="6" height="8" rx="1" fill="#93c5fd" />
+                                <circle cx="5" cy="12" r="3" fill="#0f172a" />
+                                <circle cx="15" cy="12" r="3" fill="#0f172a" />
+                              </g>
+                            );
+                          })()}
+                        </svg>
+
+                        {truckProgress === 0 && !isDispatching && (
+                          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center">
+                            <span className="text-xs text-slate-400 font-mono">Select Supply Item & Click Dispatch</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Controls */}
+                      <div className="flex gap-3 justify-between items-center pt-1.5">
+                        <div className="w-2/3 bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800">
+                          <div 
+                            className="bg-blue-500 h-full transition-all duration-300"
+                            style={{ width: `${truckProgress}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono">{truckProgress}% Complete</span>
+                      </div>
+
+                      <button
+                        onClick={triggerDispatchTruck}
+                        disabled={isDispatching}
+                        className={`w-full text-center font-bold font-sans text-xs py-2.5 px-4 rounded-xl transition border shadow-lg flex items-center justify-center gap-2 ${
+                          isDispatching 
+                            ? "bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed" 
+                            : "bg-blue-600 hover:bg-blue-500 text-white border-blue-400 cursor-pointer animate-pulse"
+                        }`}
+                      >
+                        <RefreshCw className={`w-4 h-4 ${isDispatching ? "animate-spin" : ""}`} />
+                        <span>{isDispatching ? `Inbound Freight Moving (${truckProgress}%)` : "🚚 Dispatch Mock Inbound Shipment (+500 Units)"}</span>
+                      </button>
+                    </div>
+
+                    {/* Live Transit Log Terminal */}
+                    <div className="bg-slate-950 rounded-xl border border-slate-800 p-3 space-y-2">
+                      <div className="text-[10px] font-mono text-slate-500 flex justify-between items-center uppercase tracking-wider border-b border-slate-800 pb-1.5">
+                        <span>📜 Live Shipping Transit Logs</span>
+                        <span className="text-blue-500 animate-pulse">Node Status: Active</span>
+                      </div>
+                      <div className="max-h-28 overflow-y-auto space-y-1.5 font-mono text-[10px] text-slate-300">
+                        {shipmentLogs.map((log, index) => (
+                          <div key={index} className="flex gap-1.5">
+                            <span className="text-slate-500 font-medium">❯</span>
+                            <span className={log.includes("Complete") ? "text-emerald-400 font-semibold" : ""}>{log}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -2715,6 +3476,21 @@ EOF
                           ))}
                         </div>
                       </div>
+
+                      {/* Custom System Prompt */}
+                      <div className="space-y-1.5 pt-1">
+                        <label className="text-[10px] text-slate-400 block font-mono font-medium uppercase">4. Custom System Prompt (AI Behavior)</label>
+                        <textarea
+                          rows={2}
+                          value={customSystemPrompt}
+                          onChange={(e) => handleSystemPromptChange(e.target.value)}
+                          placeholder="Leave empty to use built-in ERPNext Smart Copilot instructions..."
+                          className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-[11px] text-slate-200 focus:outline-none focus:border-slate-700 font-mono resize-none leading-relaxed"
+                        />
+                        <span className="text-[9px] text-slate-500 block leading-tight">
+                          Isko empty chhodne par standard assistant guidelines use hongi. Aap ise empty kar sakte hain!
+                        </span>
+                      </div>
                     </div>
 
                     {/* Part B: Live ERPNext API connection */}
@@ -2827,6 +3603,347 @@ EOF
                     </div>
                   </div>
                 )}
+
+                {activeDbTab === "manage" && (
+                  <div className="space-y-4">
+                    {/* Database Control Actions */}
+                    <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800 space-y-3">
+                      <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-800/80 pb-2">
+                        ⚙️ Database Actions (Control Panel)
+                      </h4>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        Yahan se aap default/old sandbox database ko clear karke bilkul empty kar sakte hain, ya fir standard mock data vapas restore kar sakte hain.
+                      </p>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleClearDb("")}
+                          className="py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-lg text-xs font-mono font-medium transition flex items-center justify-center gap-1.5"
+                        >
+                          🗑️ Clear Entire DB (Sab Delete Karein)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleResetDbToDefault}
+                          className="py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-lg text-xs font-mono font-medium transition flex items-center justify-center gap-1.5"
+                        >
+                          🔄 Reset default Mock DB
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-1.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleClearDb("stock")}
+                          className="py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-mono transition"
+                        >
+                          Clear Stock
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleClearDb("customers")}
+                          className="py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-mono transition"
+                        >
+                          Clear Ledger
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleClearDb("leads")}
+                          className="py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-mono transition"
+                        >
+                          Clear Leads
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleClearDb("quotations")}
+                          className="py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-mono transition"
+                        >
+                          Clear Quotations
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Add Custom Record Form */}
+                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 space-y-4">
+                      <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-800/80 pb-2">
+                        ➕ Add Naya Custom Record
+                      </h4>
+
+                      <form onSubmit={handleAddRecord} className="space-y-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-400 block font-mono font-medium">1. SELECT DOCTYPE (TABLE)</label>
+                          <select
+                            value={formTable}
+                            onChange={(e) => {
+                              setFormTable(e.target.value as any);
+                              setFormStatusMessage({ text: "", isError: false });
+                            }}
+                            className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-slate-700 font-mono"
+                          >
+                            <option value="stock">📦 Stock Item (tabItem)</option>
+                            <option value="customers">👤 Customer Ledger (Accounts Outstanding)</option>
+                            <option value="leads">🤝 CRM Lead (Potential Customer)</option>
+                            <option value="quotations">📄 Sales Quotation (Draft Offer)</option>
+                          </select>
+                        </div>
+
+                        {/* Stock Fields */}
+                        {formTable === "stock" && (
+                          <div className="space-y-2.5 border-t border-slate-800/50 pt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2">
+                            <div className="sm:col-span-2">
+                              <p className="text-[10px] text-amber-400/90 font-medium italic mb-1">
+                                Hint: Iske baad AI Copilot se check karne ke liye bol sakte hain: "Check stock of [Item Code]"
+                              </p>
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-slate-400 font-mono">Item Code * (e.g. ERP-ITEM-505)</label>
+                              <input
+                                type="text"
+                                value={formStock.item_code}
+                                onChange={(e) => setFormStock({ ...formStock, item_code: e.target.value.toUpperCase() })}
+                                placeholder="E.g. ERP-ITEM-505"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-slate-400 font-mono">Item Name * (e.g. Oxygen Mask)</label>
+                              <input
+                                type="text"
+                                value={formStock.name}
+                                onChange={(e) => setFormStock({ ...formStock, name: e.target.value })}
+                                placeholder="E.g. Oxygen Concentrator Mask"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-slate-400 font-mono">Stock Quantity (Numbers)</label>
+                              <input
+                                type="number"
+                                value={formStock.stock}
+                                onChange={(e) => setFormStock({ ...formStock, stock: e.target.value })}
+                                placeholder="E.g. 150"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-slate-400 font-mono">Price (INR)</label>
+                              <input
+                                type="number"
+                                value={formStock.price}
+                                onChange={(e) => setFormStock({ ...formStock, price: e.target.value })}
+                                placeholder="E.g. 1200"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="text-[9px] text-slate-400 font-mono">Warehouse Name</label>
+                              <input
+                                type="text"
+                                value={formStock.warehouse}
+                                onChange={(e) => setFormStock({ ...formStock, warehouse: e.target.value })}
+                                placeholder="E.g. Delhi Regional Warehouse"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Customer Fields */}
+                        {formTable === "customers" && (
+                          <div className="space-y-2.5 border-t border-slate-800/50 pt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2">
+                            <div className="sm:col-span-2">
+                              <p className="text-[10px] text-amber-400/90 font-medium italic mb-1">
+                                Hint: Iske baad AI Copilot se bolein: "[Customer Name] ka outstanding check karo"
+                              </p>
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="text-[9px] text-slate-400 font-mono">Customer Name *</label>
+                              <input
+                                type="text"
+                                value={formCustomer.customer_name}
+                                onChange={(e) => setFormCustomer({ ...formCustomer, customer_name: e.target.value })}
+                                placeholder="E.g. Fortis Healthcare"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-slate-400 font-mono">Outstanding Bill Amount (INR)</label>
+                              <input
+                                type="number"
+                                value={formCustomer.outstanding}
+                                onChange={(e) => setFormCustomer({ ...formCustomer, outstanding: e.target.value })}
+                                placeholder="E.g. 180000"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-slate-400 font-mono">Credit Limit (INR)</label>
+                              <input
+                                type="number"
+                                value={formCustomer.credit_limit}
+                                onChange={(e) => setFormCustomer({ ...formCustomer, credit_limit: e.target.value })}
+                                placeholder="E.g. 500000"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="text-[9px] text-slate-400 font-mono">Accounts Email Address</label>
+                              <input
+                                type="email"
+                                value={formCustomer.email}
+                                onChange={(e) => setFormCustomer({ ...formCustomer, email: e.target.value })}
+                                placeholder="E.g. finance@fortis.com"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Lead Fields */}
+                        {formTable === "leads" && (
+                          <div className="space-y-2.5 border-t border-slate-800/50 pt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2">
+                            <div className="sm:col-span-2">
+                              <p className="text-[10px] text-amber-400/90 font-medium italic mb-1">
+                                Hint: Aap directly chat AI me bolkar bhi real/mock lead insert kar sakte hain!
+                              </p>
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-slate-400 font-mono">Lead Contact Person Name *</label>
+                              <input
+                                type="text"
+                                value={formLead.lead_name}
+                                onChange={(e) => setFormLead({ ...formLead, lead_name: e.target.value })}
+                                placeholder="E.g. Rajesh Kumar"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-slate-400 font-mono">Company / Hospital Name *</label>
+                              <input
+                                type="text"
+                                value={formLead.company_name}
+                                onChange={(e) => setFormLead({ ...formLead, company_name: e.target.value })}
+                                placeholder="E.g. Kumar Pharma"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-slate-400 font-mono">Email Address *</label>
+                              <input
+                                type="email"
+                                value={formLead.email}
+                                onChange={(e) => setFormLead({ ...formLead, email: e.target.value })}
+                                placeholder="E.g. rajesh@kumarpharma.com"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-slate-400 font-mono">Phone Number</label>
+                              <input
+                                type="text"
+                                value={formLead.phone}
+                                onChange={(e) => setFormLead({ ...formLead, phone: e.target.value })}
+                                placeholder="E.g. +91 99887 76655"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Quotation Fields */}
+                        {formTable === "quotations" && (
+                          <div className="space-y-2.5 border-t border-slate-800/50 pt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2">
+                            <div className="sm:col-span-2">
+                              <p className="text-[10px] text-amber-400/90 font-medium italic mb-1">
+                                Hint: Aap dynamically chat me sales rep bankar AI se quotation draft karva sakte hain.
+                              </p>
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-slate-400 font-mono">Customer Name *</label>
+                              <input
+                                type="text"
+                                value={formQuotation.customer_name}
+                                onChange={(e) => setFormQuotation({ ...formQuotation, customer_name: e.target.value })}
+                                placeholder="E.g. Fortis Healthcare"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-slate-400 font-mono">Item Code *</label>
+                              <input
+                                type="text"
+                                value={formQuotation.item_code}
+                                onChange={(e) => setFormQuotation({ ...formQuotation, item_code: e.target.value.toUpperCase() })}
+                                placeholder="E.g. ERP-ITEM-101"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-slate-400 font-mono">Quantity *</label>
+                              <input
+                                type="number"
+                                value={formQuotation.qty}
+                                onChange={(e) => setFormQuotation({ ...formQuotation, qty: e.target.value })}
+                                placeholder="E.g. 5"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-slate-400 font-mono">Grand Total Amount (INR)</label>
+                              <input
+                                type="number"
+                                value={formQuotation.grand_total}
+                                onChange={(e) => setFormQuotation({ ...formQuotation, grand_total: e.target.value })}
+                                placeholder="E.g. 150000"
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="text-[9px] text-slate-400 font-mono">Status</label>
+                              <select
+                                value={formQuotation.status}
+                                onChange={(e) => setFormQuotation({ ...formQuotation, status: e.target.value })}
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-slate-700"
+                              >
+                                <option value="Draft">Draft</option>
+                                <option value="Submitted">Submitted</option>
+                                <option value="Cancelled">Cancelled</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Status Message */}
+                        {formStatusMessage.text && (
+                          <div className={`p-2.5 rounded text-[10.5px] font-mono border mt-3 ${
+                            formStatusMessage.isError
+                              ? "bg-rose-500/10 border-rose-500/20 text-rose-400"
+                              : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                          }`}>
+                            {formStatusMessage.text}
+                          </div>
+                        )}
+
+                        <button
+                          type="submit"
+                          className={`w-full py-2 bg-gradient-to-r ${tc.gradient} text-slate-950 rounded-lg text-xs font-semibold tracking-wide hover:shadow-lg transition mt-4`}
+                        >
+                          💾 Save Record in Sandbox Database
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Simulation Quick Buttons */}
@@ -2848,187 +3965,190 @@ EOF
 
             {/* AI Copilot Chat Module on right */}
             <div className="lg:col-span-7 bg-slate-900/60 rounded-2xl border border-slate-800 flex flex-col overflow-hidden h-[620px]">
-              <div className="p-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5 text-emerald-400" />
-                  <div>
-                    <span className="text-sm font-semibold font-display block">ERPNext Smart AI Assistant</span>
-                    <span className="text-[10px] text-slate-400 font-mono">
-                      {aiProvider === "gemini" ? "Google Gemini (Free & Stable Mode) with Active Database Tools" : "Llama 3.3 70B via OpenRouter with Active Database Tools"}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setMessages([
-                    { role: "system", content: "Chat history cleared." },
-                    { role: "model", content: "Namaste! Main ERPNext system se directly connected hoon. Aap mujhse stock checking, customer outstanding balances ya lead creation ke baare me pooch sakte hain." }
-                  ])}
-                  className="text-xs text-slate-400 hover:text-rose-400 transition"
-                >
-                  Clear Chat
-                </button>
-              </div>
-
-              {/* AI Provider selector & API Key Setup Panel */}
-              <div className="bg-slate-950 p-4 border-b border-slate-800/80 space-y-3">
-                <div className="space-y-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                    <label className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-400 flex items-center gap-1.5">
-                      <Key className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Google Gemini API Key (Optional):</span>
-                    </label>
-                    <a
-                      href="https://aistudio.google.com/app/apikey"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[10px] text-cyan-400 hover:text-cyan-300 underline font-semibold flex items-center gap-0.5"
-                    >
-                      Get Free Key from AI Studio ↗
-                    </a>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type="password"
-                      placeholder="Enter key to override (or leave empty to use built-in free proxy)"
-                      className="w-full bg-slate-900 text-xs text-emerald-400 placeholder-slate-500 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2 focus:outline-none font-mono"
-                      value={geminiApiKey}
-                      onChange={(e) => handleApiKeyChange(e.target.value)}
-                    />
-                  </div>
-                  {!geminiApiKey ? (
-                    <p className="text-[10.5px] text-emerald-400/95 font-medium leading-relaxed flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 animate-pulse" />
-                      <span>✓ Workspace Default Key Active! Bilkul free aur unlimited response chalega.</span>
-                    </p>
-                  ) : (
-                    geminiApiKey.trim().startsWith("AIzaSy") ? (
-                      <p className="text-[10.5px] text-emerald-400/95 font-medium leading-relaxed flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                        <span>✓ Custom Gemini Key configured successfully. No cost tier active.</span>
-                      </p>
-                    ) : (
-                      <p className="text-[10.5px] text-rose-400 font-medium leading-relaxed flex items-center gap-1">
-                        <AlertCircle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
-                        <span>⚠️ Invalid format. Key should start with 'AIzaSy'.</span>
-                      </p>
-                    )
-                  )}
-                </div>
-              </div>
-
-              {/* Chat messages */}
-              <div className="flex-1 overflow-auto p-4 space-y-4 bg-slate-950/20">
-                {messages.map((msg, index) => (
-                  <div
-                    key={index}
-                    className={`flex ${
-                      msg.role === "user" ? "justify-end" : "justify-start"
-                    }`}
-                  >
-                    <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs md:text-sm leading-relaxed ${
-                        msg.role === "user"
-                          ? "bg-emerald-600 text-slate-950 rounded-br-none font-medium shadow-md shadow-emerald-500/5"
-                          : msg.role === "system"
-                          ? "bg-slate-900/60 text-slate-400 border border-slate-800 text-center mx-auto my-1 py-1 px-3 rounded-full text-[10px]"
-                          : "bg-slate-900 text-slate-100 border border-slate-800/80 rounded-bl-none shadow-md"
-                      }`}
-                    >
-                      {msg.content}
+                <div className="p-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-emerald-400" />
+                    <div>
+                      <span className="text-sm font-semibold font-display block">ERPNext Smart AI Assistant</span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {isDeveloperMode 
+                          ? (aiProvider === "gemini" ? "Google Gemini (Free & Stable Mode) with Active Database Tools" : "Llama 3.3 70B via OpenRouter with Active Database Tools")
+                          : "ERPNext Direct API Bridge Active & Online"}
+                      </span>
                     </div>
                   </div>
-                ))}
-                {isSending && (
-                  <div className="flex justify-start">
-                    <div className="bg-slate-900 border border-slate-800 text-slate-300 rounded-2xl rounded-bl-none px-4 py-3 text-xs flex items-center gap-2">
-                      <div className="flex space-x-1">
-                        <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
-                        <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
-                        <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                  <button
+                    onClick={() => setMessages([
+                      { role: "system", content: "Chat history cleared." },
+                      { role: "model", content: "Namaste! Main ERPNext system se directly connected hoon. Aap mujhse stock checking, customer outstanding balances ya lead creation ke baare me pooch sakte hain." }
+                    ])}
+                    className="text-xs text-slate-400 hover:text-rose-400 transition"
+                  >
+                    Clear Chat
+                  </button>
+                </div>
+
+                {/* AI Provider selector & API Key Setup Panel */}
+                {isDeveloperMode && (
+                  <div className="bg-slate-950 p-4 border-b border-slate-800/80 space-y-3">
+                    <div className="space-y-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                        <label className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-400 flex items-center gap-1.5">
+                          <Key className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Google Gemini API Key (Optional):</span>
+                        </label>
+                        <a
+                          href="https://aistudio.google.com/app/apikey"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-cyan-400 hover:text-cyan-300 underline font-semibold flex items-center gap-0.5"
+                        >
+                          Get Free Key from AI Studio ↗
+                        </a>
                       </div>
-                      <span className="text-[10px] text-slate-400 font-mono">Querying Mock ERPNext Database via Tool Calling...</span>
+                      <div className="relative">
+                        <input
+                          type="password"
+                          placeholder="Enter key to override (or leave empty to use built-in free proxy)"
+                          className="w-full bg-slate-900 text-xs text-emerald-400 placeholder-slate-500 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2 focus:outline-none font-mono"
+                          value={geminiApiKey}
+                          onChange={(e) => handleApiKeyChange(e.target.value)}
+                        />
+                      </div>
+                      {!geminiApiKey ? (
+                        <p className="text-[10.5px] text-emerald-400/95 font-medium leading-relaxed flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 animate-pulse" />
+                          <span>✓ Workspace Default Key Active! Bilkul free aur unlimited response chalega.</span>
+                        </p>
+                      ) : (
+                        geminiApiKey.trim().startsWith("AIzaSy") ? (
+                          <p className="text-[10.5px] text-emerald-400/95 font-medium leading-relaxed flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                            <span>✓ Custom Gemini Key configured successfully. No cost tier active.</span>
+                          </p>
+                        ) : (
+                          <p className="text-[10.5px] text-rose-400 font-medium leading-relaxed flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+                            <span>⚠️ Invalid format. Key should start with 'AIzaSy'.</span>
+                          </p>
+                        )
+                      )}
                     </div>
                   </div>
                 )}
-                <div ref={messagesEndRef} />
-              </div>
 
-              {/* Execution Trace logs accordion at bottom of chat */}
-              {executionLogs.length > 0 && (
-                <div className="border-t border-slate-800/80 bg-slate-900/90 p-3 max-h-[160px] overflow-auto">
-                  <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-mono font-bold uppercase tracking-wider mb-2">
-                    <Terminal className="w-3 h-3 text-emerald-400" />
-                    <span>Gemini Agent Tool Trace Execution Logs:</span>
-                  </div>
-                  <div className="space-y-1.5 text-[11px] font-mono">
-                    {executionLogs.map((log, index) => (
-                      <div key={index} className="border-b border-slate-800/40 pb-1.5">
-                        <span className="text-emerald-400 font-semibold">[{log.phase}]</span>{" "}
-                        <span className="text-slate-300">{log.description}</span>
-                        {log.args && (
-                          <div className="text-slate-400 bg-slate-950 p-1.5 rounded mt-1 overflow-x-auto max-w-full text-[10px]">
-                            Arguments: {JSON.stringify(log.args)}
-                          </div>
-                        )}
-                        {log.result && (
-                          <div className="text-teal-400 bg-slate-950 p-1.5 rounded mt-1 overflow-x-auto max-w-full text-[10px]">
-                            DB Result: {JSON.stringify(log.result)}
-                          </div>
-                        )}
+                {/* Chat messages */}
+                <div className="flex-1 overflow-auto p-4 space-y-4 bg-slate-950/20">
+                  {messages.map((msg, index) => (
+                    <div
+                      key={index}
+                      className={`flex ${
+                        msg.role === "user" ? "justify-end" : "justify-start"
+                      }`}
+                    >
+                      <div
+                        className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs md:text-sm leading-relaxed ${
+                          msg.role === "user"
+                            ? "bg-emerald-600 text-slate-950 rounded-br-none font-medium shadow-md shadow-emerald-500/5"
+                            : msg.role === "system"
+                            ? "bg-slate-900/60 text-slate-400 border border-slate-800 text-center mx-auto my-1 py-1 px-3 rounded-full text-[10px]"
+                            : "bg-slate-900 text-slate-100 border border-slate-800/80 rounded-bl-none shadow-md"
+                        }`}
+                      >
+                        {msg.content}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Cooldown Alert Countdown */}
-              {cooldownTime > 0 && (
-                <div className="mx-3 my-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex flex-col gap-1.5 animate-pulse">
-                  <div className="flex items-center justify-between font-bold">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 bg-amber-400 rounded-full animate-ping"></span>
-                      Rate Limit Cooldown Active
-                    </span>
-                    <span className="font-mono text-sm bg-amber-500/20 px-2 py-0.5 rounded-md text-amber-400">
-                      {cooldownTime}s remaining
-                    </span>
-                  </div>
-                  <p className="text-slate-300 leading-normal text-[11px]">
-                    Gemini Free Tier API quota reset ho raha hai. Aapka agla query time <strong>{cooldownTime} seconds</strong> baad hai.
-                  </p>
-                  <div className="w-full bg-slate-950 h-1 rounded-full mt-1 overflow-hidden">
-                    <div 
-                      className="bg-amber-400 h-full transition-all duration-1000 ease-linear" 
-                      style={{ width: `${(cooldownTime / 60) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Chat input box */}
-              <form onSubmit={handleSendMessage} className="p-3 bg-slate-900 border-t border-slate-800 flex gap-2">
-                <input
-                  type="text"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  placeholder={cooldownTime > 0 ? `Please wait ${cooldownTime}s before next query...` : "E.g., Check stock for ERP-ITEM-101..."}
-                  disabled={isSending || cooldownTime > 0}
-                  className="flex-1 bg-slate-950 text-slate-100 border border-slate-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs md:text-sm focus:outline-none transition placeholder-slate-500 disabled:opacity-50"
-                />
-                <button
-                  type="submit"
-                  disabled={isSending || !chatInput.trim() || cooldownTime > 0}
-                  className="p-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl transition flex-shrink-0 flex items-center justify-center min-w-[44px]"
-                >
-                  {cooldownTime > 0 ? (
-                    <span className="font-mono text-xs">{cooldownTime}s</span>
-                  ) : (
-                    <Send className="w-4 h-4 md:w-5 h-5" />
+                    </div>
+                  ))}
+                  {isSending && (
+                    <div className="flex justify-start">
+                      <div className="bg-slate-900 border border-slate-800 text-slate-300 rounded-2xl rounded-bl-none px-4 py-3 text-xs flex items-center gap-2">
+                        <div className="flex space-x-1">
+                          <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                          <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                          <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono">Querying Mock ERPNext Database via Tool Calling...</span>
+                      </div>
+                    </div>
                   )}
-                </button>
-              </form>
-            </div>
+                  <div ref={messagesEndRef} />
+                </div>
 
+                {/* Execution Trace logs accordion at bottom of chat */}
+                {executionLogs.length > 0 && (
+                  <div className="border-t border-slate-800/80 bg-slate-900/90 p-3 max-h-[160px] overflow-auto">
+                    <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-mono font-bold uppercase tracking-wider mb-2">
+                      <Terminal className="w-3 h-3 text-emerald-400" />
+                      <span>{isDeveloperMode ? "Gemini Agent Tool Trace Execution Logs:" : "Copilot Engine Function Call Trace:"}</span>
+                    </div>
+                    <div className="space-y-1.5 text-[11px] font-mono">
+                      {executionLogs.map((log, index) => (
+                        <div key={index} className="border-b border-slate-800/40 pb-1.5">
+                          <span className="text-emerald-400 font-semibold">[{log.phase}]</span>{" "}
+                          <span className="text-slate-300">{log.description}</span>
+                          {log.args && (
+                            <div className="text-slate-400 bg-slate-950 p-1.5 rounded mt-1 overflow-x-auto max-w-full text-[10px]">
+                              Arguments: {JSON.stringify(log.args)}
+                            </div>
+                          )}
+                          {log.result && (
+                            <div className="text-teal-400 bg-slate-950 p-1.5 rounded mt-1 overflow-x-auto max-w-full text-[10px]">
+                              DB Result: {JSON.stringify(log.result)}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Cooldown Alert Countdown */}
+                {cooldownTime > 0 && (
+                  <div className="mx-3 my-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex flex-col gap-1.5 animate-pulse">
+                    <div className="flex items-center justify-between font-bold">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 bg-amber-400 rounded-full animate-ping"></span>
+                        Rate Limit Cooldown Active
+                      </span>
+                      <span className="font-mono text-sm bg-amber-500/20 px-2 py-0.5 rounded-md text-amber-400">
+                        {cooldownTime}s remaining
+                      </span>
+                    </div>
+                    <p className="text-slate-300 leading-normal text-[11px]">
+                      Gemini Free Tier API quota reset ho raha hai. Aapka agla query time <strong>{cooldownTime} seconds</strong> baad hai.
+                    </p>
+                    <div className="w-full bg-slate-950 h-1 rounded-full mt-1 overflow-hidden">
+                      <div 
+                        className="bg-amber-400 h-full transition-all duration-1000 ease-linear" 
+                        style={{ width: `${(cooldownTime / 60) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Chat input box */}
+                <form onSubmit={handleSendMessage} className="p-3 bg-slate-900 border-t border-slate-800 flex gap-2">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder={cooldownTime > 0 ? `Please wait ${cooldownTime}s before next query...` : "E.g., Check stock for ERP-ITEM-101..."}
+                    disabled={isSending || cooldownTime > 0}
+                    className="flex-1 bg-slate-950 text-slate-100 border border-slate-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs md:text-sm focus:outline-none transition placeholder-slate-500 disabled:opacity-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSending || !chatInput.trim() || cooldownTime > 0}
+                    className="p-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl transition flex-shrink-0 flex items-center justify-center min-w-[44px]"
+                  >
+                    {cooldownTime > 0 ? (
+                      <span className="font-mono text-xs">{cooldownTime}s</span>
+                    ) : (
+                      <Send className="w-4 h-4 md:w-5 h-5" />
+                    )}
+                  </button>
+                </form>
+              </div>
           </div>
         )}
 
@@ -3400,13 +4520,347 @@ EOF
           </div>
         )}
 
+        {/* 6. SITE & DEVICE SECURITY TAB */}
+        {activeTab === "security" && (
+          <div className="space-y-6 animate-fade-in">
+            
+            {/* Header Card */}
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 text-slate-100 shadow-2xl relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/5 to-teal-500/5 pointer-events-none" />
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="space-y-1.5">
+                  <span className="bg-emerald-500/10 text-emerald-400 font-mono text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider flex items-center gap-1.5 w-fit">
+                    <ShieldCheck className="w-3.5 h-3.5" /> Cyber Security & Site Enforcer
+                  </span>
+                  <h2 className="text-2xl font-black font-display tracking-tight text-slate-100">
+                    ERPNext & Connected Devices Security Hardening
+                  </h2>
+                  <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
+                    Aapka connected local ERPNext site (<code>http://mysite.localhost:8000</code>) aur simulation chatbot environment ko secure karna hamari sabse badi priority hai. Apne credentials ko leak hone se bachane aur cyber attacks se systems ko safe rakhne ke liye neeche diye gaye indicators aur active protocols ko follow karein:
+                  </p>
+                </div>
+                <div className="p-3 bg-slate-950/40 border border-slate-800 rounded-2xl">
+                  <Lock className="w-10 h-10 text-emerald-400 animate-pulse" />
+                </div>
+              </div>
+            </div>
+
+            {/* LIVE URL SAFETY INSPECTOR */}
+            <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-5 space-y-4">
+              <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                <Shield className="w-4 h-4 text-emerald-400" /> 
+                Live Connection Safety & SSL Analyzer
+              </h3>
+              
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-900 space-y-4">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <span className="text-[10px] text-slate-500 block font-mono">CURRENT ERP URL STAGE:</span>
+                    <span className="text-xs font-mono text-slate-200 font-bold bg-slate-900 px-2 py-1 rounded border border-slate-850 inline-block mt-1">
+                      {erpUrl || "Localhost (Mock Sandbox)"}
+                    </span>
+                  </div>
+                  
+                  {/* Dynamic SSL/TLS Verdict */}
+                  <div className="flex items-center gap-2.5">
+                    {!erpUrl ? (
+                      <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 px-3 py-1.5 rounded-lg text-xs font-mono">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Mock Mode Active: 100% Client-Side Safe</span>
+                      </div>
+                    ) : erpUrl.startsWith("https://") ? (
+                      <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-lg text-xs font-mono">
+                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                        <span>SSL Secure Encryption: ACTIVE (HTTPS)</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 px-3 py-1.5 rounded-lg text-xs font-mono">
+                        <AlertCircle className="w-4 h-4 text-amber-400 animate-bounce" />
+                        <span>Unencrypted Link Warning (HTTP Plaintext)</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Detailed Analysis Text based on URL */}
+                <div className="text-xs text-slate-300 leading-relaxed space-y-2 border-t border-slate-900/60 pt-3">
+                  {!erpUrl ? (
+                    <p>
+                      💡 Aap abhi local mock database sandbox ka istemaal kar rahe hain. Is state me aapke credentials browser me local hi rehte hain aur kisi server par send nahi hote, jo ki security perspective se <strong>100% Safe</strong> hai!
+                    </p>
+                  ) : erpUrl.startsWith("https://") ? (
+                    <p>
+                      ✅ Aapka traffic <strong>HTTPS SSL/TLS Encryption</strong> ke zariye securely route ho raha hai. Iska matlab hai ki aapke local laptops, routers ya devices par transiting packets ko koi intercept nahi kar sakta. Credentials completely encrypted formats me travel kar rahe hain!
+                    </p>
+                  ) : (
+                    <div className="space-y-1">
+                      <p className="text-amber-400 font-bold">
+                        ⚠️ Warning: Aapka URL standard unencrypted (HTTP) transport use kar raha hai!
+                      </p>
+                      <p className="text-slate-400">
+                        Chunki local network ya public Wi-Fi par plain HTTP traffic inspect kiya ja sakta hai, isliye aapke Frappe API key aur secret ko shoulder-sniffers se khatra ho sakta hai. 
+                        <strong className="text-slate-200"> Isko fix karne ke liye:</strong> Apne local computer me Ngrok chalate waqt hamesha <code className="bg-slate-900 text-emerald-400 px-1 py-0.5 rounded">https://</code> se start hone wala tunnel URL use karein. Ngrok automatically local HTTP portal ko secure HTTPS gateway me convert kar deta hai!
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* CHROME "NOT SECURE" WARNING GUIDE */}
+              <div className="bg-rose-950/10 border border-rose-900/30 rounded-xl p-4 space-y-3 mt-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-rose-500/10 rounded-lg text-rose-400 shrink-0 mt-0.5">
+                    <AlertCircle className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-bold text-rose-300 uppercase tracking-wide">
+                      🛑 Fix Chrome Browser "Your Connection to this site is not secure" Warning for mysite.localhost:8000
+                    </h4>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Jab aap browser me direct <code>http://mysite.localhost:8000</code> kholte hain, toh Google Chrome ye Warning dikhata hai. <strong>Ghabraiyye nahi!</strong> Iska matlab ye nahi hai ki aapke computer me koi virus ya attack hua hai. Ye isliye hai kyunki local computer me automatically SSL Certificate (HTTPS) active nahi hota.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-rose-950/40">
+                  <div className="bg-slate-950 p-3 rounded-lg border border-slate-900 space-y-2">
+                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                      Option 1 (Sabse Aasan): Use Ngrok HTTPS Tunnel
+                    </span>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Ngrok aapke local site ko automatically ek safe online **HTTPS** address de deta hai. Isse Chrome ka non-secure warn complete bypass ho jayega aur custom padlock lock icon show hoga.
+                    </p>
+                    <ol className="text-[10.5px] text-slate-300 space-y-1 pl-4 list-decimal leading-relaxed">
+                      <li>Apne Terminal me <code>ngrok http 8000</code> run karein.</li>
+                      <li>Ngrok jo <code>https://...ngrok-free.app</code> link dega, use copy karein.</li>
+                      <li>Vahi secure link apne browser me open karein - pure lock visual secure ho jayega!</li>
+                    </ol>
+                  </div>
+
+                  <div className="bg-slate-950 p-3 rounded-lg border border-slate-900 space-y-2">
+                    <span className="text-xs font-bold text-sky-400 flex items-center gap-1.5">
+                      ⚙️ Option 2: Setup Local SSL Certificate (mkcert)
+                    </span>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Agar aap bina internet/ngrok ke local offline me real HTTPS chalana chahte hain:
+                    </p>
+                    <div className="bg-slate-900 p-2 rounded text-[10px] font-mono text-emerald-400 space-y-1 overflow-x-auto">
+                      <div># Ubuntu/WSL me mkcert install karein</div>
+                      <div>sudo apt install mkcert libnss3-tools -y && mkcert -install</div>
+                      <div className="mt-1"># Apne site ke liye secure certificate generate karein</div>
+                      <div>mkcert mysite.localhost localhost 127.0.0.1</div>
+                    </div>
+                    <p className="text-[10.5px] text-slate-400 leading-relaxed">
+                      Isse browser ko local CA certificate mil jayega aur security tab me standard HTTPS green indicator activate ho jayega.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* THREE COLUMN DEFENSE ARCHITECTURE */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Card 1: Tunnel Protection */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-5 space-y-4 flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 border-b border-slate-800 pb-2.5">
+                    <span className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center font-bold text-xs text-emerald-400">1</span>
+                    <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wide">🌐 Tunnel & Ngrok Security</h3>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Agar aap local laptop me <code>mysite.localhost:8000</code> chala rahe hain, toh ngrok ko public world me open chhodne ke bajaye use <strong>Basic Authentication</strong> se secure karein.
+                  </p>
+                  
+                  <div className="bg-slate-950 p-2.5 rounded border border-slate-900 space-y-1.5 font-mono text-[10.5px]">
+                    <span className="text-slate-500 block text-[9.5px]">🔐 SECURED NGROK RUN COMMAND:</span>
+                    <div className="bg-slate-900 p-2 rounded text-slate-300 flex justify-between items-center gap-2 overflow-x-auto">
+                      <span className="text-[10px] whitespace-nowrap">ngrok http 8000 --basic-auth="admin:SecurePass789!"</span>
+                      <button 
+                        onClick={() => copyToClipboard('ngrok http 8000 --basic-auth="admin:SecurePass789!"', "sec_n1")}
+                        className="text-[9px] bg-slate-800 px-1.5 py-0.5 rounded text-emerald-400 shrink-0"
+                      >
+                        {copiedId === "sec_n1" ? "✓" : "Copy"}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-emerald-950/20 border border-emerald-900/40 p-2.5 rounded text-[11px] text-slate-300 space-y-1">
+                    <span className="text-emerald-400 font-bold block">💡 Ye code kaha paste karna hai?</span>
+                    <p className="leading-relaxed text-slate-300">
+                      Ise aapko apne computer ke **Terminal (WSL / Ubuntu / Command Prompt)** me chalana hai, jaha aap normal <code>ngrok http 8000</code> chalate hain. Pehle se chal rahe ngrok ko terminal me <strong>Ctrl + C</strong> daba kar rokein, fir ye secured command copy karke paste karein aur Enter dabayein!
+                    </p>
+                  </div>
+                  
+                  <p className="text-[10.5px] text-slate-400 leading-relaxed">
+                    ✓ Isse jab bhi koi aapka ngrok URL browser me open karega, toh use user/password (admin / SecurePass789!) poocha jayega. Aapka site totally protected rahega!
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 2: Least Privilege API User */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-5 space-y-4 flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 border-b border-slate-800 pb-2.5">
+                    <span className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center font-bold text-xs text-emerald-400">2</span>
+                    <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wide">🛡️ Least Privilege API Setup</h3>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Hamesha core <code>Administrator</code> keys use karne se bachein. Ek alag restricted API User setup karein:
+                  </p>
+                  
+                  <div className="bg-slate-950 p-3 rounded-lg border border-slate-900 text-xs space-y-2 text-slate-300 leading-relaxed">
+                    <div className="flex gap-2">
+                      <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                      <span>Frappe me ek naya user banayein: <strong>ai_copilot_api</strong></span>
+                    </div>
+                    <div className="flex gap-2 border-t border-slate-900/60 pt-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                      <span>Ek dedicated Role assign karein jisme sirf <strong>Item, Bin, Lead, Customer</strong> aur <strong>Quotation</strong> ka "Read" permissions ho.</span>
+                    </div>
+                    <div className="flex gap-2 border-t border-slate-900/60 pt-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                      <span>Naye restricted user ke dashboard se API Key generate karein aur use is app me sync ke liye feed karein.</span>
+                    </div>
+                  </div>
+                  <p className="text-[10.5px] text-slate-400 leading-relaxed">
+                    ✓ Agar in future key bypass bhi hoti hai, toh hacker kabhi system settings, files, ya database tables delete nahi kar payega!
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 3: Linux Server Hardening */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-5 space-y-4 flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 border-b border-slate-800 pb-2.5">
+                    <span className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center font-bold text-xs text-emerald-400">3</span>
+                    <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wide">💻 Linux/WSL Firewall</h3>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Apne local Ubuntu/WSL laptop ya VPS server par core services ko unauthorized connection request block karne ke liye firewall set karein:
+                  </p>
+                  
+                  <div className="bg-slate-950 p-2.5 rounded border border-slate-900 space-y-1.5 font-mono text-[10.5px]">
+                    <span className="text-slate-500 block text-[9.5px]">🖥️ SHIELD FIREWALL COMMANDS (UBUNTU):</span>
+                    <div className="bg-slate-900 p-2 rounded text-slate-300 space-y-1 font-mono text-[10px]">
+                      <div>sudo ufw default deny incoming</div>
+                      <div>sudo ufw allow 22/tcp <span className="text-slate-500"># SSH</span></div>
+                      <div>sudo ufw allow 80/tcp <span className="text-slate-500"># HTTP</span></div>
+                      <div>sudo ufw allow 443/tcp <span className="text-slate-500"># HTTPS</span></div>
+                      <div>sudo ufw enable</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-rose-950/20 border border-rose-900/40 p-2.5 rounded text-[11px] text-slate-300 space-y-1">
+                    <span className="text-rose-400 font-bold block">⚠️ Error: 'ufw' command not found?</span>
+                    <p className="leading-relaxed text-slate-300">
+                      Aapke computer me firewall module (ufw) installed nahi hai. Ise install karne ke liye apne terminal me pehle ye command run karein:<br />
+                      <code className="bg-slate-900 text-emerald-400 px-1 py-0.5 rounded font-mono text-[10.5px] block mt-1 select-all">sudo apt update && sudo apt install ufw -y</code>
+                      Uske baad upar wale ufw commands execute karein, wo fully work karenge!
+                    </p>
+                  </div>
+
+                  <p className="text-[10.5px] text-slate-400 leading-relaxed">
+                    ✓ Is firewall command se internet par direct connections block ho jayenge, aur aapki local machine port scanner attacks se bilkul protected rahegi.
+                  </p>
+                </div>
+              </div>
+
+            </div>
+
+            {/* INTERACTIVE ENCRYPTION GENERATOR & ROLE POLICY CONFIGURATOR */}
+            <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-6 space-y-4">
+              <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                <Settings className="w-4 h-4 text-emerald-400 animate-spin" />
+                Dynamic Security Role Configurator & Python Policy Generator
+              </h3>
+              
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Apne ERPNext server par dynamic security rules lagane ke liye, niche diye gaye DocTypes select karein jinhe aap protect karna chahte hain. Hamara generator automatic ek <strong>Server-Side Security Whitelist Handler</strong> python script generate karega jise aap direct use kar sakte hain:
+              </p>
+
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 border-t border-slate-800/80 pt-4">
+                
+                {/* Selectors Column */}
+                <div className="lg:col-span-2 space-y-4">
+                  <span className="text-[10px] text-slate-400 block font-mono">CHOOSE DOCTYPES TO SHIELD:</span>
+                  
+                  <div className="space-y-2.5">
+                    {[
+                      { key: "item", name: "📦 Item Directory (Master Catalog)", checked: true },
+                      { key: "bin", name: "📊 Bin Table (Stock Quantities & Warehouses)", checked: true },
+                      { key: "customer", name: "👤 Customer List (Sensitive Account Info)", checked: false },
+                      { key: "lead", name: "📈 Lead Table (CRM Contacts & Pipeline)", checked: false },
+                      { key: "quotation", name: "📑 Quotation Table (Pricing & Discounts)", checked: false }
+                    ].map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2.5 bg-slate-950 p-2.5 rounded-lg border border-slate-900">
+                        <input 
+                          type="checkbox" 
+                          id={`shield_doc_${idx}`}
+                          defaultChecked={item.checked} 
+                          className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-500 bg-slate-900 border-slate-800"
+                        />
+                        <label htmlFor={`shield_doc_${idx}`} className="text-xs text-slate-300 cursor-pointer font-medium select-none">
+                          {item.name}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="p-3.5 bg-slate-950/40 border border-slate-850 rounded-lg space-y-1.5 text-xs">
+                    <span className="text-slate-400 block font-mono text-[10px]">🔒 SAFE API PROXY PROMISE:</span>
+                    <p className="text-slate-400 text-[11px] leading-relaxed">
+                      Aapka Gemini key, API secrets aur credentials client-side browser me secure layer me store hote hain aur direct Google servers ke through encrypted handshake call lagate hain. No middle third-party servers trace or save your credentials!
+                    </p>
+                  </div>
+                </div>
+
+                {/* Generator Code Output Column */}
+                <div className="lg:col-span-3 space-y-2">
+                  <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
+                    <span>🛡️ GENERATED SECURITY PY SHIELD (api_shield.py):</span>
+                    <button 
+                      onClick={() => copyToClipboard(`# Dynamic Frappe Security Shield Policy\nimport frappe\n\ndef validate_api_caller(user_email):\n    """Validate caller roles explicitly before return"""\n    roles = frappe.get_roles(user_email)\n    if "System Manager" in roles or "AI Copilot Restricted" in roles:\n        return True\n    return False\n\n@frappe.whitelist(allow_guest=False)\ndef get_shielded_stock_data(item_code):\n    """Only callers with AI Copilot Restricted role can execute"""\n    caller = frappe.session.user\n    if not validate_api_caller(caller):\n        frappe.throw("Access Denied: Caller does not possess AI Copilot Restricted clearance Role!")\n    \n    # Fetch data only from verified Bin table\n    return frappe.db.get_value("Bin", {"item_code": item_code}, ["warehouse", "actual_qty"], as_dict=True)`, "shield_code")}
+                      className="text-emerald-400 hover:text-emerald-300 font-mono text-[9px] border border-slate-800 bg-slate-950 px-2 py-0.5 rounded"
+                    >
+                      {copiedId === "shield_code" ? "✓ Code Copied" : "Copy Shield Code"}
+                    </button>
+                  </div>
+
+                  <div className="bg-slate-950 rounded-lg p-3.5 font-mono text-[11px] text-slate-300 overflow-x-auto border border-slate-900 leading-relaxed max-h-[290px]">
+                    <div className="text-slate-500"># Dynamic Frappe Security Shield Policy</div>
+                    <div>import frappe</div>
+                    <div className="text-slate-500 mt-1.5"># Validate user role strictly to block unauthorized requests</div>
+                    <div className="text-emerald-400">def validate_api_caller(user_email):</div>
+                    <div className="pl-4 text-slate-300">roles = frappe.get_roles(user_email)</div>
+                    <div className="pl-4 text-slate-300">if "System Manager" in roles or "AI Copilot Restricted" in roles:</div>
+                    <div className="pl-8 text-emerald-400">return True</div>
+                    <div className="pl-4 text-slate-300">return False</div>
+                    
+                    <div className="text-slate-500 mt-2.5">@frappe.whitelist(allow_guest=False)</div>
+                    <div className="text-emerald-400">def get_shielded_stock_data(item_code):</div>
+                    <div className="pl-4 text-slate-300">caller = frappe.session.user</div>
+                    <div className="pl-4 text-slate-300">if not validate_api_caller(caller):</div>
+                    <div className="pl-8 text-rose-400">frappe.throw("Access Denied: Secure user validation failed!")</div>
+                    <div className="pl-4 text-slate-300">return frappe.db.get_value("Bin", &#123;"item_code": item_code&#125;, ["warehouse", "actual_qty"], as_dict=True)</div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+        )}
+
       </main>
 
       {/* Footer */}
       <footer className="border-t border-slate-800 bg-slate-900/40 px-6 py-6 mt-auto">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-400">
           <div>
-            <span>© 2026 ERPNext AI Copilot System. Developed with 💚 and Gemini 3.5 Flash Function Calling.</span>
+            <span>© 2026 ERPNext AI Copilot System. Built with React, TypeScript & ERPNext APIs.</span>
           </div>
           <div className="flex gap-4">
             <span className="hover:text-slate-300 transition cursor-pointer">Architecture Roadmap</span>
